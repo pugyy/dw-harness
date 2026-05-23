@@ -57,6 +57,18 @@ python tests/run_hook_smoke_tests.py
 
 ### 2. 复制到你的项目 / Copy into your project
 
+也可以用一键脚本 / Or use the init script:
+
+```bash
+# macOS / Linux
+bash init.sh /your-dw-project
+
+# Windows
+.\init.ps1 C:\path\to\your-dw-project
+```
+
+手动复制 / Manual copy:
+
 macOS / Linux:
 
 ```bash
