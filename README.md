@@ -143,6 +143,10 @@ Analysis ──→ Design  ──→ ETL Dev  ──→ Test ──→ Compare  
 - 金额字段用 `DOUBLE` -- 不行，换成 `DECIMAL(20,4)` / Money field uses DOUBLE -- not allowed, use `DECIMAL(20,4)`
 - 分区字段叫 `dt` -- 不行，统一叫 `partition_dt` / Partition field named `dt` -- not allowed, use `partition_dt`
 
+支持 ODPS/MaxCompute、Hive、Spark SQL。默认按环境变量 `DW_HARNESS_DIALECT`、文件名/近邻目录、SQL 文件头部注释和语法特征自动判断；不确定时按 ODPS 处理。
+
+Supports ODPS/MaxCompute, Hive, and Spark SQL. Detection checks `DW_HARNESS_DIALECT`, file names/nearby directories, header comments, and dialect syntax; ODPS is the fallback.
+
 ### `block_dangerous_ddl.py` — 执行前拦住 / Block before execution
 
 - `DROP TABLE` / `DROP DATABASE`

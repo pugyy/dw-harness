@@ -54,7 +54,7 @@ echo "  1. 编辑 CLAUDE.md，填写你的项目信息 / Edit CLAUDE.md with you
 echo "     $TARGET_CLAUDE/CLAUDE.md"
 echo ""
 echo "  2. 如果你的系统只有 python3，改一下 hooks 命令 / If you only have python3:"
-echo "     sed -i 's/python /\.claude\/hooks\//  python3 .claude/hooks/' $TARGET_CLAUDE/settings.json"
+echo "     sed -i 's#python .claude/hooks/#python3 .claude/hooks/#g' $TARGET_CLAUDE/settings.json"
 echo ""
 echo "  3. 启动 Claude Code / Start Claude Code:"
 echo "     cd $TARGET && claude"

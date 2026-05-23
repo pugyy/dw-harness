@@ -16,13 +16,46 @@ DIALECT_ENV = "DW_HARNESS_DIALECT"
 SUPPORTED_DIALECTS = ("odps", "hive", "spark")
 
 
-def detect_dialect(sql: str) -> str:
+def normalize_dialect(value: str) -> str:
+    value = value.lower().strip()
+    if value == "maxcompute":
+        return "odps"
+    if value in SUPPORTED_DIALECTS:
+        return value
+    return ""
+
+
+def detect_dialect(sql: str, path: Path | None = None) -> str:
     env = os.environ.get(DIALECT_ENV, "").lower()
-    if env in SUPPORTED_DIALECTS:
-        return env
+    dialect = normalize_dialect(env)
+    if dialect:
+        return dialect
+
+    path_hints: list[str] = []
+    if path:
+        path_hints.append(path.name.lower())
+        path_hints.extend(part.lower() for part in path.parts[-3:-1])
+    for hint in path_hints:
+        for candidate in ("spark", "hive", "odps", "maxcompute"):
+            if candidate in hint:
+                dialect = normalize_dialect(candidate)
+                if dialect:
+                    return dialect
+
+    header = "\n".join(sql.splitlines()[:12])
+    explicit = re.search(
+        r"(?:^|\n)\s*--\s*(?:dialect\s*:\s*)?(odps|maxcompute|hive|spark)\b",
+        header,
+        flags=re.I,
+    )
+    if explicit:
+        dialect = normalize_dialect(explicit.group(1))
+        if dialect:
+            return dialect
+
     if re.search(r"\busing\s+(parquet|orc|delta|csv|json)\b", sql, flags=re.I):
         return "spark"
-    if re.search(r"\bstored\s+as\b", sql, flags=re.I):
+    if re.search(r"\b(stored\s+as|row\s+format|serde)\b", sql, flags=re.I):
         return "hive"
     return "odps"
 
@@ -192,7 +225,7 @@ def main() -> int:
         return 2
 
     content = read_text(path)
-    dialect = detect_dialect(content)
+    dialect = detect_dialect(content, path)
     issues = validate(content, dialect)
     if not issues:
         return 0

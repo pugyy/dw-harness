@@ -55,6 +55,10 @@ Reads stdin JSON from Claude Code, extracts `tool_input.file_path`, only checks 
 - 金额字段使用 `DOUBLE` / Money field uses `DOUBLE`
 - 分区字段使用 `dt` 而不是 `partition_dt` / Partition field uses `dt` instead of `partition_dt`
 
+SQL 方言支持 ODPS/MaxCompute、Hive、Spark SQL。`validate_sql.py` 会按 `DW_HARNESS_DIALECT` 环境变量、文件名/近邻目录、文件头注释和语法特征判断方言；没有明确信号时默认按 ODPS 处理。
+
+SQL dialects supported: ODPS/MaxCompute, Hive, Spark SQL. `validate_sql.py` detects dialect from `DW_HARNESS_DIALECT`, file names/nearby directories, header comments, and syntax hints; ODPS is the fallback.
+
 ---
 
 ## 第四层：Subagents 上下文隔离 / Layer 4: Subagent Context Isolation

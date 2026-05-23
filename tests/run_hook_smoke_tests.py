@@ -76,9 +76,11 @@ def test_validate_bad_hive() -> None:
         },
     )
     assert_true(result.returncode == 2, "bad Hive SQL should be blocked")
+    assert_true("dialect=hive" in result.stderr, result.stderr)
     assert_true("insert-requires-partition" in result.stderr, result.stderr)
     assert_true("money-decimal" in result.stderr, result.stderr)
     assert_true("partition-name" in result.stderr, result.stderr)
+    assert_true("hive-format-hint" in result.stderr, result.stderr)
 
 
 def test_validate_good_spark() -> None:
@@ -89,6 +91,33 @@ def test_validate_good_spark() -> None:
             "tool_name": "Write",
             "tool_input": {"file_path": str(SAMPLES / "good_spark_insert.sql")},
         },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+
+
+def test_validate_bad_spark_create() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "bad_spark_create_missing_using.sql")},
+        },
+    )
+    assert_true(result.returncode == 2, "bad Spark SQL should be blocked")
+    assert_true("dialect=spark" in result.stderr, result.stderr)
+    assert_true("spark-format-hint" in result.stderr, result.stderr)
+
+
+def test_dialect_env_override() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "bad_spark_create_missing_using.sql")},
+        },
+        env={"DW_HARNESS_DIALECT": "odps"},
     )
     assert_true(result.returncode == 0, result.stderr)
 
@@ -141,6 +170,8 @@ def main() -> int:
         test_validate_bad_sql,
         test_validate_bad_hive,
         test_validate_good_spark,
+        test_validate_bad_spark_create,
+        test_dialect_env_override,
         test_block_dangerous_ddl,
         test_allow_safe_bash,
         test_inject_context_outputs_additional_context,
