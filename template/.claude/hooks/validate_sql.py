@@ -1,12 +1,30 @@
 #!/usr/bin/env python3
-"""Validate SQL files from Claude Code PostToolUse hook input."""
+"""Validate SQL files from Claude Code PostToolUse hook input.
+
+Supports ODPS/MaxCompute, Hive, and Spark SQL dialects.
+"""
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
+
+DIALECT_ENV = "DW_HARNESS_DIALECT"
+SUPPORTED_DIALECTS = ("odps", "hive", "spark")
+
+
+def detect_dialect(sql: str) -> str:
+    env = os.environ.get(DIALECT_ENV, "").lower()
+    if env in SUPPORTED_DIALECTS:
+        return env
+    if re.search(r"\busing\s+(parquet|orc|delta|csv|json)\b", sql, flags=re.I):
+        return "spark"
+    if re.search(r"\bstored\s+as\b", sql, flags=re.I):
+        return "hive"
+    return "odps"
 
 
 def read_hook_input() -> dict:
@@ -58,7 +76,7 @@ def line_number(sql: str, offset: int) -> int:
     return sql.count("\n", 0, offset) + 1
 
 
-def validate(sql: str) -> list[dict]:
+def validate(sql: str, dialect: str) -> list[dict]:
     issues: list[dict] = []
     uncommented = strip_sql_comments(sql)
 
@@ -68,23 +86,20 @@ def validate(sql: str) -> list[dict]:
                 "line": line_number(uncommented, match.start()),
                 "severity": "ERROR",
                 "rule": "no-select-star",
-                "message": "禁止使用 SELECT *，请明确指定字段列表。",
+                "message": "SELECT * is not allowed. List fields explicitly.",
             }
         )
 
+    insert_kw = r"\binsert\s+(?:overwrite\s+)?(?:into\s+)?(?:table\s+)?"
     for line_no, statement in iter_statements(uncommented):
-        has_insert = re.search(
-            r"\binsert\s+(?:overwrite|into)\s+(?:table\s+)?",
-            statement,
-            flags=re.I,
-        )
-        if has_insert and not re.search(r"\bpartition\s*\(", statement, flags=re.I):
+        has_insert = re.search(insert_kw, statement, flags=re.I)
+        if has_insert and not re.search(r"\bpartition\s*[\(=]", statement, flags=re.I):
             issues.append(
                 {
                     "line": line_no,
                     "severity": "ERROR",
                     "rule": "insert-requires-partition",
-                    "message": "INSERT/INSERT OVERWRITE 语句必须包含 PARTITION 子句。",
+                    "message": "INSERT/INSERT OVERWRITE must include a PARTITION clause.",
                 }
             )
 
@@ -96,7 +111,7 @@ def validate(sql: str) -> list[dict]:
                     "line": line_no,
                     "severity": "ERROR",
                     "rule": "update-requires-where",
-                    "message": "UPDATE 必须包含 WHERE 条件。",
+                    "message": "UPDATE must include a WHERE clause.",
                 }
             )
 
@@ -108,7 +123,7 @@ def validate(sql: str) -> list[dict]:
                     "line": line_no,
                     "severity": "ERROR",
                     "rule": "delete-requires-where",
-                    "message": "DELETE 必须包含 WHERE 条件。",
+                    "message": "DELETE must include a WHERE clause.",
                 }
             )
 
@@ -120,9 +135,33 @@ def validate(sql: str) -> list[dict]:
                     "line": line_no,
                     "severity": "ERROR",
                     "rule": "partition-name",
-                    "message": "分区字段必须命名为 partition_dt，不使用 dt。",
+                    "message": "Partition field must be named partition_dt, not dt.",
                 }
             )
+
+        if dialect == "spark" and re.search(r"\bcreate\s+table\b", statement, flags=re.I):
+            if not re.search(r"\busing\s+", statement, flags=re.I) and not re.search(
+                r"\bstored\s+as\b", statement, flags=re.I
+            ):
+                issues.append(
+                    {
+                        "line": line_no,
+                        "severity": "WARNING",
+                        "rule": "spark-format-hint",
+                        "message": "Spark SQL CREATE TABLE should specify USING or STORED AS.",
+                    }
+                )
+
+        if dialect == "hive" and re.search(r"\bcreate\s+table\b", statement, flags=re.I):
+            if not re.search(r"\bstored\s+as\b", statement, flags=re.I):
+                issues.append(
+                    {
+                        "line": line_no,
+                        "severity": "WARNING",
+                        "rule": "hive-format-hint",
+                        "message": "Hive CREATE TABLE should specify STORED AS.",
+                    }
+                )
 
     money_field = re.compile(r"\b(amount|price|fee|cost|money|pay)\w*\b", flags=re.I)
     for index, line in enumerate(uncommented.splitlines(), start=1):
@@ -132,7 +171,7 @@ def validate(sql: str) -> list[dict]:
                     "line": index,
                     "severity": "ERROR",
                     "rule": "money-decimal",
-                    "message": "金额字段必须使用 DECIMAL(20,4)，不允许 DOUBLE。",
+                    "message": "Money fields must use DECIMAL(20,4), not DOUBLE.",
                 }
             )
 
@@ -149,14 +188,16 @@ def main() -> int:
     if path.suffix.lower() != ".sql":
         return 0
     if not path.exists():
-        print(f"[dw-harness] SQL 文件不存在: {path}", file=sys.stderr)
+        print(f"[dw-harness] SQL file not found: {path}", file=sys.stderr)
         return 2
 
-    issues = validate(read_text(path))
+    content = read_text(path)
+    dialect = detect_dialect(content)
+    issues = validate(content, dialect)
     if not issues:
         return 0
 
-    print(f"[dw-harness] SQL 规范检查失败: {path}", file=sys.stderr)
+    print(f"[dw-harness] SQL check failed (dialect={dialect}): {path}", file=sys.stderr)
     for issue in issues:
         print(
             f"[{issue['severity']}] line {issue['line']} "

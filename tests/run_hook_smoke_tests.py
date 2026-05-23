@@ -66,6 +66,33 @@ def test_validate_bad_sql() -> None:
     assert_true("insert-requires-partition" in result.stderr, result.stderr)
 
 
+def test_validate_bad_hive() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "bad_hive_multi.sql")},
+        },
+    )
+    assert_true(result.returncode == 2, "bad Hive SQL should be blocked")
+    assert_true("insert-requires-partition" in result.stderr, result.stderr)
+    assert_true("money-decimal" in result.stderr, result.stderr)
+    assert_true("partition-name" in result.stderr, result.stderr)
+
+
+def test_validate_good_spark() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "good_spark_insert.sql")},
+        },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+
+
 def test_block_dangerous_ddl() -> None:
     result = run_hook(
         "block_dangerous_ddl.py",
@@ -112,6 +139,8 @@ def main() -> int:
     tests = [
         test_validate_good_sql,
         test_validate_bad_sql,
+        test_validate_bad_hive,
+        test_validate_good_spark,
         test_block_dangerous_ddl,
         test_allow_safe_bash,
         test_inject_context_outputs_additional_context,
