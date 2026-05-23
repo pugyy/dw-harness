@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/validate_sql.py",
+            "timeout": 60,
+            "statusMessage": "检查 SQL 规范..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/block_dangerous_ddl.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/inject_context.py",
+            "timeout": 10,
+            "statusMessage": "记录 compact 摘要..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "检查数仓规范执行结果：是否所有 SQL 文件都通过了规范检查？待确认问题清单是否完整？"
+          }
+        ]
+      }
+    ]
+  }
+}

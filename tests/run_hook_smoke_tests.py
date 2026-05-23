@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Smoke tests for dw-harness hook scripts."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HOOKS = ROOT / "template" / ".claude" / "hooks"
+SAMPLES = ROOT / "examples" / "sample-sql"
+
+
+def run_hook(script: str, payload: dict) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(HOOKS / script)],
+        input=json.dumps(payload, ensure_ascii=False),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def assert_true(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def test_validate_good_sql() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "good_insert.sql")},
+        },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+
+
+def test_validate_bad_sql() -> None:
+    result = run_hook(
+        "validate_sql.py",
+        {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(SAMPLES / "bad_select_star.sql")},
+        },
+    )
+    assert_true(result.returncode == 2, "bad SQL should be blocked")
+    assert_true("no-select-star" in result.stderr, result.stderr)
+    assert_true("insert-requires-partition" in result.stderr, result.stderr)
+
+
+def test_block_dangerous_ddl() -> None:
+    result = run_hook(
+        "block_dangerous_ddl.py",
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "odpscmd -e \"DROP TABLE db_a.dws_trade_order_di;\""},
+        },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+    payload = json.loads(result.stdout)
+    decision = payload["hookSpecificOutput"]["permissionDecision"]
+    assert_true(decision == "deny", result.stdout)
+
+
+def test_allow_safe_bash() -> None:
+    result = run_hook(
+        "block_dangerous_ddl.py",
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "odpscmd -e \"SELECT count(1) FROM db_a.dws_trade_order_di;\""},
+        },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+    assert_true(result.stdout.strip() == "", result.stdout)
+
+
+def main() -> int:
+    tests = [
+        test_validate_good_sql,
+        test_validate_bad_sql,
+        test_block_dangerous_ddl,
+        test_allow_safe_bash,
+    ]
+    for test in tests:
+        test()
+        print(f"PASS {test.__name__}")
+    print("All hook smoke tests passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
