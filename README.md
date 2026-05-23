@@ -2,7 +2,7 @@
 
 # dw-harness
 
-**数仓 AI 编程，不再靠记忆**
+**数仓 AI 编程，不靠记忆，靠代码**
 
 Data Warehouse AI Coding Harness
 
@@ -15,45 +15,45 @@ Data Warehouse AI Coding Harness
 
 ## 这是什么 / What is this
 
-> **中文** 👇
+> **中文**
 >
-> 用 Claude Code 做数仓开发时，你大概率遇到过这些问题：对话一长 AI 就忘了字段口径、写出来的 SQL 不合规范、血缘查询把上下文撑爆……
+> 用 Claude Code 做数仓开发，聊久了 AI 就开始犯糊涂——忘字段口径、SQL 不合规范、血缘查询把上下文撑爆。这些问题谁都用 Claude Code 做数仓的人都踩过。
 >
-> `dw-harness` 是一套开箱即用的 Claude Code 项目模板。它把数仓开发中那些"每次都要讲一遍但 AI 还是会忘"的东西，变成了代码级的基础设施——hooks 强制拦截坏 SQL、subagents 隔离高 token 操作、skills 把八步流程固化下来。
+> `dw-harness` 把这些反复踩的坑变成了代码：hooks 自动拦截问题 SQL，subagents 把重活隔离出去，skills 把八步流程写死。复制到项目里，启动 `claude` 就能用。
 >
-> 复制到你的项目里，`claude` 一启动就能用。
+> 不需要从零教 AI 你的规范，因为它根本不该靠"记住"。
 
-> **English** 👇
+> **English**
 >
-> When using Claude Code for data warehouse development, you've probably hit these walls: AI forgets field definitions mid-conversation, SQL it produces breaks your conventions, and lineage queries blow up the context window.
+> If you use Claude Code for data warehouse work, you know the drill: long conversations make AI sloppy — forgetting field definitions, writing SQL that breaks your conventions, lineage queries eating up the entire context window.
 >
-> `dw-harness` is a ready-to-use Claude Code project template. It turns the "things you have to repeat every time but AI still forgets" into code-level infrastructure — hooks that block bad SQL, subagents that isolate high-token work, and skills that codify an 8-step workflow.
+> `dw-harness` turns these recurring headaches into code: hooks block bad SQL automatically, subagents isolate heavy lifting, skills lock in an 8-step workflow. Copy it into your project, run `claude`, done.
 >
-> Copy it into your project, start `claude`, and you're good to go.
+> Your conventions shouldn't rely on AI "remembering" them.
 
 ---
 
 ## 解决了什么 / Problems it solves
 
-| | 问题 / Problem | 表现 / Symptom | 解法 / Solution |
-|---|---|---|---|
-| 🧠 | AI "失忆" / Context amnesia | compact 后字段口径、本轮约束全丢 | `CLAUDE.md` + `context/` 持久化，compact 后自动重注入 |
-| 📏 | 规范靠记忆 / Conventions live in prompts | `SELECT *`、缺 `PARTITION`、金额字段用 `DOUBLE` | PostToolUse hook 写完 SQL 自动检查，违规即拦截 |
-| ⚠️ | 危险操作 / Dangerous DDL | Bash 里误跑 `DROP TABLE` / `TRUNCATE` | PreToolUse hook 在执行前阻断 |
-| 🎈 | Context 膨胀 / Context bloat | 血缘、自测、比对结果撑满主对话 | subagents 只返回摘要，主 context 保持干净 |
-| 🔄 | 流程不稳定 / Inconsistent workflow | 每个需求都从头讲一遍流程 | 8 个标准化 skill 命令 |
+| 问题 / Problem | 你遇到的 / What happens | 怎么办 / Fix |
+|---|---|---|
+| AI 忘事 / Forgets things | compact 之后字段口径、本轮约束全丢了 | `CLAUDE.md` + `context/` 写到文件里，compact 后自动重注入 |
+| 规范写不住 / Can't enforce conventions | 还是会出现 `SELECT *`、缺 `PARTITION`、金额字段用 `DOUBLE` | PostToolUse hook，写完 SQL 自动查，违规直接拦 |
+| 误操作 / Accidental damage | Bash 里不小心跑了 `DROP TABLE` / `TRUNCATE` | PreToolUse hook，危险命令执行前拦住 |
+| Context 爆了 / Context overflow | 血缘、自测、比对结果一堆东西塞进主对话 | subagents 接走重活，只把摘要交回来 |
+| 流程对不上 / No consistent process | 每次做需求都要从头给 AI 讲一遍流程 | 8 个 skill 命令，流程写死 |
 
 ---
 
 ## 快速上手 / Quick Start
 
-### 1️⃣ 验证模板 / Verify the template
+### 1. 跑一下测试，确认模板没问题 / Run the smoke tests
 
 ```bash
 python tests/run_hook_smoke_tests.py
 ```
 
-### 2️⃣ 复制到你的项目 / Copy to your project
+### 2. 复制到你的项目 / Copy into your project
 
 macOS / Linux:
 
@@ -73,11 +73,11 @@ Set-Location C:\path\to\your-dw-project
 claude
 ```
 
-> 💡 Hook 默认用 `python`。如果你的机器只有 `python3`，把 `.claude/settings.json` 里的命令改成 `python3 .claude/hooks/*.py`。
+> Hook 脚本默认用 `python` 调用。如果你的系统只有 `python3`，改一下 `.claude/settings.json` 里的命令就行。
 
-### 3️⃣ 填写项目信息 / Fill in your project context
+### 3. 改一下 CLAUDE.md / Edit CLAUDE.md
 
-编辑 `.claude/CLAUDE.md`，写上当前表名、版本、字段口径、本轮禁止修改的表等。
+填上你当前在开发的表名、版本、字段口径、不能动的表这些信息。
 
 ---
 
@@ -85,19 +85,19 @@ claude
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Layer 5  SKILL 改造 — 按需加载，减少 context 消耗  │
+│  Layer 5  SKILL 改造 — 按需加载，不浪费 context     │
 ├──────────────────────────────────────────────────┤
-│  Layer 4  Subagents — 隔离高 token 操作，只回收摘要  │
+│  Layer 4  Subagents — 重活隔离出去，只回收结果       │
 ├──────────────────────────────────────────────────┤
-│  Layer 3  Hooks — SQL 规范强制检查，不靠 AI 记忆    │
+│  Layer 3  Hooks — 规范检查交给代码，不靠 AI 记       │
 ├──────────────────────────────────────────────────┤
-│  Layer 2  Auto Memory — 跨会话自动沉淀经验和口径    │
+│  Layer 2  Auto Memory — 跨会话自动积累经验和踩坑     │
 ├──────────────────────────────────────────────────┤
-│  Layer 1  CLAUDE.md — 写死约束，compact 后重注入    │
+│  Layer 1  CLAUDE.md — 约束写死，compact 后重新注入   │
 └──────────────────────────────────────────────────┘
 ```
 
-> 详见 / See also: [docs/five-layers-defense.md](docs/five-layers-defense.md)
+> 详细说明: [docs/five-layers-defense.md](docs/five-layers-defense.md)
 
 ---
 
@@ -107,7 +107,7 @@ claude
 需求分析 ──→ 技术设计 ──→ ETL开发 ──→ 自测 ──→ 数据比对 ──→ SR导入 ──→ 性能优化 ──→ SLA/DQC
 ```
 
-| 步骤 / Step | Skill 命令 / Command | 核心产出 / Output |
+| 步骤 / Step | 命令 / Command | 产出 / Output |
 |---|---|---|
 | 1 需求分析 / Requirement Analysis | `/dw-requirement-analysis` | 需求摘要、字段口径草稿、待确认问题清单 |
 | 2 技术设计 / Technical Design | `/dw-technical-design` | OneData 建模说明、主键/分区/粒度设计 |
@@ -118,26 +118,26 @@ claude
 | 7 性能优化 / Performance Tuning | `/dw-performance-optimization` | SQL 和资源优化建议 |
 | 8 SLA/DQC | `/dw-dqc` | DQC 规则 JSON、SLA 配置 |
 
-> 详见 / See also: [docs/eight-steps-workflow.md](docs/eight-steps-workflow.md)
+> 详细说明: [docs/eight-steps-workflow.md](docs/eight-steps-workflow.md)
 
 ---
 
 ## Hook 规则 / Hook Rules
 
-### `validate_sql.py` — 写完 SQL 自动检查 / Auto-check on write
+### `validate_sql.py` — 写完 SQL 自动查 / Checks on write
 
-- 🚫 `SELECT *` — 必须明确字段
-- 🚫 `INSERT` 不带 `PARTITION` — 必须指定分区
-- 🚫 `UPDATE` / `DELETE` 不带 `WHERE` — 必须有条件
-- 🚫 金额字段用 `DOUBLE` — 必须 `DECIMAL(20,4)`
-- 🚫 分区字段叫 `dt` — 统一用 `partition_dt`
+- `SELECT *` -- 不行，必须写清楚字段
+- `INSERT` 不带 `PARTITION` -- 不行，必须指定分区
+- `UPDATE` / `DELETE` 不带 `WHERE` -- 不行，必须加条件
+- 金额字段用 `DOUBLE` -- 不行，换成 `DECIMAL(20,4)`
+- 分区字段叫 `dt` -- 不行，统一叫 `partition_dt`
 
-### `block_dangerous_ddl.py` — 执行前拦截 / Block before execution
+### `block_dangerous_ddl.py` — 执行前拦住 / Blocks before execution
 
-- 🚫 `DROP TABLE` / `DROP DATABASE`
-- 🚫 `TRUNCATE TABLE`
-- 🚫 `ALTER TABLE ... DROP COLUMN`
-- 🚫 `DELETE FROM` 不带 `WHERE`
+- `DROP TABLE` / `DROP DATABASE`
+- `TRUNCATE TABLE`
+- `ALTER TABLE ... DROP COLUMN`
+- `DELETE FROM` 不带 `WHERE`
 
 ---
 
@@ -146,32 +146,32 @@ claude
 ```text
 dw-harness/
 ├── README.md
-├── docs/                            # 设计文档 / Design docs
+├── docs/                            # 设计文档
 ├── examples/
 │   ├── example_claude_md.md         # CLAUDE.md 填写示例
 │   └── sample-sql/                  # 好/坏 SQL 示例
-├── template/.claude/                # 📦 复制这个目录到你的项目
+├── template/.claude/                # <-- 复制这个目录到你的项目
 │   ├── CLAUDE.md                    # 上下文持久化
 │   ├── settings.json                # Hooks 配置
 │   ├── context/                     # compact 后重注入的规范
 │   ├── hooks/                       # 自动化脚本 (Python)
 │   ├── agents/                      # 4 个 subagent
-│   ├── rules/                       # 路径级规范 (按需加载)
+│   ├── rules/                       # 路径级规范，按需加载
 │   └── skills/                      # 8 个 SKILL 文件
 └── tests/                           # Hook 冒烟测试
 ```
 
-所有 subagent 默认使用 `model: opus`，优先保证分析质量。复制模板后可以按需降级到 `sonnet` 或 `haiku`。
+所有 subagent 默认用 `opus`，图个稳。复制过去之后想省钱可以改成 `sonnet` 或 `haiku`。
 
-> All subagents default to `model: opus` for reliability. You can downgrade to `sonnet` or `haiku` after copying the template.
+> All subagents default to `opus` for reliability. Downgrade to `sonnet` or `haiku` if cost is a concern.
 
 ---
 
-## 设计理念 / Design Philosophy
+## 为什么这么做 / Why this approach
 
-**中文**：这个模板的出发点很简单——数仓 AI 开发的瓶颈不是 AI 不会写 SQL，而是语义理解和规范执行不稳定。所以核心思路是：**把人擅长的判断（语义、口径）写死到文件里，把 AI 擅长的执行（规范检查、重复劳动）交给代码强制执行。**
+数仓 AI 开发的瓶颈从来不是 AI 不会写 SQL，而是两件事老出问题：语义理解对不上、规范执行不稳定。所以思路很简单——**人擅长的事（判断口径、理清语义）写死到文件里，AI 擅长的事（检查规范、干重复活）交给代码去强制执行。** 别让 AI 靠"记住"来做事，让它靠代码来做事。
 
-**English**: The core insight is simple — the bottleneck in DW AI development isn't SQL writing ability, but unstable semantic understanding and convention enforcement. So the approach is: **persist what humans are good at (semantics, field definitions) into files, and enforce what AI is good at (convention checks, repetitive work) with code.**
+The bottleneck in DW AI development is never about whether AI can write SQL. It's about two things that keep breaking: getting the semantics right, and enforcing conventions consistently. The idea is straightforward -- **persist human judgment (field definitions, semantics) into files, and let code enforce what AI is good at (checking rules, doing repetitive work).** Don't make AI rely on "remembering". Make it rely on code.
 
 ---
 
@@ -186,13 +186,3 @@ dw-harness/
 ## License
 
 [MIT](LICENSE)
-
----
-
-<div align="center">
-
-**如果这个项目对你有帮助，给个 ⭐ 吧！**
-
-**If this project helps you, a ⭐ would be appreciated!**
-
-</div>
