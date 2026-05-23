@@ -161,6 +161,7 @@ dw-harness/
 │   ├── hooks/                       # 自动化脚本 / Automation scripts (Python)
 │   ├── agents/                      # 4 个 subagent
 │   ├── rules/                       # 路径级规范，按需加载 / Path-scoped rules, load on demand
+│   │   └── etl-rules.md             # ETL SQL 规范 / ETL SQL conventions
 │   └── skills/                      # 8 个 SKILL 文件 / 8 SKILL files
 └── tests/                           # Hook 冒烟测试 / Hook smoke tests
 ```
@@ -168,6 +169,10 @@ dw-harness/
 所有 subagent 默认用 `opus`，图个稳。复制过去之后想省钱可以改成 `sonnet` 或 `haiku`。
 
 All subagents default to `opus` for reliability. Downgrade to `sonnet` or `haiku` if cost is a concern.
+
+部分 agent 允许使用 `Bash` 执行只读探索、质量检查或数据比对命令。复制模板到生产项目后，请先确认这些命令只能访问你允许的环境，必要时在 agent 文件里移除 `Bash` 或调整 `permissionMode`。
+
+Some agents can use `Bash` for read-only exploration, quality checks, or comparisons. After copying the template into a production project, confirm the commands can only access approved environments. Remove `Bash` or adjust `permissionMode` in agent files if needed.
 
 ---
 

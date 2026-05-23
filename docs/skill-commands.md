@@ -64,8 +64,9 @@ The original article used Chinese step names. The template only provides English
 |------------|----------|
 | 需求分析 | `/dw-requirement-analysis` |
 | 技术设计 | `/dw-technical-design` |
+| ETL 开发 | `/dw-etl` |
 | 自测 | `/dw-self-test` |
 | 数据比对 | `/dw-data-comparison` |
+| SR 导入 | `/dw-sr` |
 | 性能优化 | `/dw-performance-optimization` |
-
-`/dw-etl`、`/dw-sr`、`/dw-dqc` 保持不变。 / These three remain unchanged.
+| SLA/DQC | `/dw-dqc` |

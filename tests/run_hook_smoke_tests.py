@@ -137,6 +137,23 @@ def test_block_dangerous_ddl() -> None:
     assert_true(decision == "deny", result.stdout)
 
 
+def test_block_delete_without_where() -> None:
+    result = run_hook(
+        "block_dangerous_ddl.py",
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "hive -e \"DELETE FROM db_a.dws_trade_order_di;\""},
+        },
+    )
+    assert_true(result.returncode == 0, result.stderr)
+    payload = json.loads(result.stdout)
+    decision = payload["hookSpecificOutput"]["permissionDecision"]
+    reason = payload["hookSpecificOutput"]["permissionDecisionReason"]
+    assert_true(decision == "deny", result.stdout)
+    assert_true("无 WHERE" in reason or "without WHERE" in reason, result.stdout)
+
+
 def test_allow_safe_bash() -> None:
     result = run_hook(
         "block_dangerous_ddl.py",
@@ -173,6 +190,7 @@ def main() -> int:
         test_validate_bad_spark_create,
         test_dialect_env_override,
         test_block_dangerous_ddl,
+        test_block_delete_without_where,
         test_allow_safe_bash,
         test_inject_context_outputs_additional_context,
     ]
