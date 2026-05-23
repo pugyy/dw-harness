@@ -48,14 +48,14 @@
 
 ## 文章术语对照
 
-早期文章里使用过中文命令名。为了文件系统和跨团队使用更稳定，项目模板实际只提供英文命令。下表仅用于把文章里的叫法对应到当前真实命令，不代表这些中文命令可以直接执行。
+早期文章里使用过中文步骤叫法。为了文件系统和跨团队使用更稳定，项目模板实际只提供英文命令。下表仅用于把文章里的步骤名称对应到当前真实命令。
 
-| 旧称 | 当前命令 |
-|------|----------|
-| `/dw-需求分析` | `/dw-requirement-analysis` |
-| `/dw-技术设计` | `/dw-technical-design` |
-| `/dw-自测` | `/dw-self-test` |
-| `/dw-比对` | `/dw-data-comparison` |
-| `/dw-优化` | `/dw-performance-optimization` |
+| 文章步骤名 | 当前命令 |
+|------------|----------|
+| 需求分析 | `/dw-requirement-analysis` |
+| 技术设计 | `/dw-technical-design` |
+| 自测 | `/dw-self-test` |
+| 数据比对 | `/dw-data-comparison` |
+| 性能优化 | `/dw-performance-optimization` |
 
 `/dw-etl`、`/dw-sr`、`/dw-dqc` 保持不变。
