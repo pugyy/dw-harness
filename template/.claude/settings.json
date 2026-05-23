@@ -25,9 +25,9 @@
         ]
       }
     ],
-    "PostCompact": [
+    "SessionStart": [
       {
-        "matcher": "manual|auto",
+        "matcher": "compact",
         "hooks": [
           {
             "type": "command",
