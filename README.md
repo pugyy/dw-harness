@@ -89,22 +89,13 @@ Fill in your current table name, version, field definitions, and tables that sho
 ## 五层防御 / Five Layers of Defense
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Layer 5  SKILL 改造 — 按需加载，不浪费 context         │
-│           Skill refactor — load on demand            │
-├─────────────────────────────────────────────────────┤
-│  Layer 4  Subagents — 重活隔离出去，只回收结果          │
-│           Subagents — isolate heavy work, return summaries│
-├─────────────────────────────────────────────────────┤
-│  Layer 3  Hooks — 规范检查交给代码，不靠 AI 记          │
-│           Hooks — code-enforced checks, not memory   │
-├─────────────────────────────────────────────────────┤
-│  Layer 2  Auto Memory — 跨会话自动积累经验和踩坑        │
-│           Auto Memory — cross-session knowledge accrual│
-├─────────────────────────────────────────────────────┤
-│  Layer 1  CLAUDE.md — 约束写死，compact 后重新注入      │
-│           CLAUDE.md — persisted constraints, re-injected│
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 5  SKILL refactor -- load on demand, save context      │
+│  Layer 4  Subagents -- isolate heavy work, return summaries   │
+│  Layer 3  Hooks -- code-enforced checks, not model memory     │
+│  Layer 2  Auto Memory -- cross-session knowledge accrual      │
+│  Layer 1  CLAUDE.md -- persisted constraints, re-injected     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 > 详细说明 / Full details: [docs/five-layers-defense.md](docs/five-layers-defense.md)
