@@ -6,7 +6,21 @@
 .claude/skills/<skill-name>/SKILL.md
 ```
 
-目录名就是 slash command 名称，例如 `.claude/skills/dw-etl/SKILL.md` 对应 `/dw-etl`。
+目录名就是 slash command 名称，例如 `.claude/skills/dw-etl/SKILL.md` 对应 `/dw-etl`。当前模板不再使用旧版平铺编号文件。
+
+当前目录结构：
+
+```text
+.claude/skills/
+├── dw-requirement-analysis/SKILL.md
+├── dw-technical-design/SKILL.md
+├── dw-etl/SKILL.md
+├── dw-self-test/SKILL.md
+├── dw-data-comparison/SKILL.md
+├── dw-sr/SKILL.md
+├── dw-performance-optimization/SKILL.md
+└── dw-dqc/SKILL.md
+```
 
 ## 8 个命令
 
@@ -32,9 +46,9 @@
 5. 金额字段使用 `DECIMAL(20,4)`
 6. 写入 `.sql` 后由 hook 自动检查
 
-## 旧命令映射
+## 文章术语对照
 
-早期文章里使用过中文命令名。为了文件系统和跨团队使用更稳定，项目模板改为英文命令：
+早期文章里使用过中文命令名。为了文件系统和跨团队使用更稳定，项目模板实际只提供英文命令。下表仅用于把文章里的叫法对应到当前真实命令，不代表这些中文命令可以直接执行。
 
 | 旧称 | 当前命令 |
 |------|----------|

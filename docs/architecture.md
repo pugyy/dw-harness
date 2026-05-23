@@ -57,6 +57,22 @@ validate_sql.py 读取 stdin JSON
 
 四个 agent 默认均使用 `model: opus`。这是偏可靠性的默认配置，适合公开模板；落到团队内部后可以按成本和任务难度调整模型。
 
+## Skill 目录
+
+```text
+.claude/skills/
+├── dw-requirement-analysis/SKILL.md
+├── dw-technical-design/SKILL.md
+├── dw-etl/SKILL.md
+├── dw-self-test/SKILL.md
+├── dw-data-comparison/SKILL.md
+├── dw-sr/SKILL.md
+├── dw-performance-optimization/SKILL.md
+└── dw-dqc/SKILL.md
+```
+
+每个 skill 目录名就是实际 slash command 名称；旧版文章里的中文命令只是概念名称，不作为模板入口。
+
 危险 DDL 使用 PreToolUse：
 
 ```text

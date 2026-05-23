@@ -66,6 +66,20 @@ Skills 放在：
 .claude/skills/<skill-name>/SKILL.md
 ```
 
+当前模板的 8 个 skill：
+
+```text
+.claude/skills/
+├── dw-requirement-analysis/SKILL.md
+├── dw-technical-design/SKILL.md
+├── dw-etl/SKILL.md
+├── dw-self-test/SKILL.md
+├── dw-data-comparison/SKILL.md
+├── dw-sr/SKILL.md
+├── dw-performance-optimization/SKILL.md
+└── dw-dqc/SKILL.md
+```
+
 Rules 放在：
 
 ```text
