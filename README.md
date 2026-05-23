@@ -90,6 +90,10 @@ dw-harness/
 │       │   ├── block_dangerous_ddl.py
 │       │   └── inject_context.py
 │       ├── agents/
+│       │   ├── sql-validator/sql-validator.md
+│       │   ├── dw-explorer/dw-explorer.md
+│       │   ├── data-quality-checker/data-quality-checker.md
+│       │   └── data-comparator/data-comparator.md
 │       ├── rules/
 │       └── skills/
 │           ├── dw-requirement-analysis/SKILL.md
@@ -103,6 +107,8 @@ dw-harness/
 └── tests/
     └── run_hook_smoke_tests.py
 ```
+
+默认所有 subagent 使用 `model: opus`，优先保证数仓分析、质量检查和比对结果的可靠性。你可以在目标项目复制模板后，按团队成本要求把只读探索类 agent 调低到 `sonnet` 或 `haiku`。
 
 ## Hook 规则
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,13 +15,23 @@ HOOKS = ROOT / "template" / ".claude" / "hooks"
 SAMPLES = ROOT / "examples" / "sample-sql"
 
 
-def run_hook(script: str, payload: dict) -> subprocess.CompletedProcess[str]:
+def run_hook(
+    script: str,
+    payload: dict,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    hook_env = os.environ.copy()
+    hook_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if env:
+        hook_env.update(env)
+
     return subprocess.run(
         [sys.executable, str(HOOKS / script)],
         input=json.dumps(payload, ensure_ascii=False),
         text=True,
         capture_output=True,
         check=False,
+        env=hook_env,
     )
 
 
@@ -83,12 +94,27 @@ def test_allow_safe_bash() -> None:
     assert_true(result.stdout.strip() == "", result.stdout)
 
 
+def test_inject_context_outputs_additional_context() -> None:
+    result = run_hook(
+        "inject_context.py",
+        {"hook_event_name": "PostCompact", "trigger": "manual"},
+        env={"CLAUDE_PROJECT_DIR": str(ROOT / "template")},
+    )
+    assert_true(result.returncode == 0, result.stderr)
+    payload = json.loads(result.stdout)
+    output = payload["hookSpecificOutput"]
+    assert_true(output["hookEventName"] == "PostCompact", result.stdout)
+    assert_true("additionalContext" in output, result.stdout)
+    assert_true("SQL 强制规范" in output["additionalContext"], result.stdout)
+
+
 def main() -> int:
     tests = [
         test_validate_good_sql,
         test_validate_bad_sql,
         test_block_dangerous_ddl,
         test_allow_safe_bash,
+        test_inject_context_outputs_additional_context,
     ]
     for test in tests:
         test()

@@ -45,6 +45,18 @@ validate_sql.py 读取 stdin JSON
   +-- 失败：stderr 输出问题，exit 2 阻断
 ```
 
+## Agent 目录
+
+```text
+.claude/agents/
+├── sql-validator/sql-validator.md
+├── dw-explorer/dw-explorer.md
+├── data-quality-checker/data-quality-checker.md
+└── data-comparator/data-comparator.md
+```
+
+四个 agent 默认均使用 `model: opus`。这是偏可靠性的默认配置，适合公开模板；落到团队内部后可以按成本和任务难度调整模型。
+
 危险 DDL 使用 PreToolUse：
 
 ```text

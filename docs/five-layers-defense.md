@@ -19,7 +19,7 @@
 
 目标目录：`.claude/context/`
 
-`0x_conventions.md` 存放跨步骤复用的核心规则。`inject_context.py` 会在 compact 后记录 compact summary 到 `last_compact_summary.md`，方便人工或后续会话回看。
+`0x_conventions.md` 存放跨步骤复用的核心规则。`inject_context.py` 会在 compact 后把该文件内容通过 `additionalContext` 重新交给 Claude，同时把 compact summary 记录到 `last_compact_summary.md`，方便人工或后续会话回看。
 
 长期稳定规则仍应优先放在 `.claude/CLAUDE.md` 和 `.claude/rules/`。
 
@@ -31,7 +31,7 @@
 |------|------|------|
 | PostToolUse | `validate_sql.py` | 写入/编辑 SQL 后检查规范 |
 | PreToolUse | `block_dangerous_ddl.py` | Bash 执行前阻断危险 DDL |
-| PostCompact | `inject_context.py` | 记录 compact 摘要 |
+| PostCompact | `inject_context.py` | 重注入数仓规范，并记录 compact 摘要 |
 
 `validate_sql.py` 会读取 Claude Code 传入的 stdin JSON，取出 `tool_input.file_path`，只检查 `.sql` 文件。
 
@@ -44,6 +44,8 @@
 - 分区字段使用 `dt` 而不是 `partition_dt`
 
 ## 第四层：Subagents 上下文隔离
+
+默认所有 agent 使用 `model: opus`，先保证复杂数仓任务的准确性。成本敏感时，可以把 `sql-validator`、`dw-explorer` 调整为 `sonnet` 或 `haiku`。
 
 适合交给 subagent 的工作：
 

@@ -8,7 +8,7 @@ tools:
   - Glob
   - Grep
   - Bash
-model: haiku
+model: opus
 permissionMode: dontAsk
 ---
 

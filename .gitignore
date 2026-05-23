@@ -24,6 +24,8 @@ Thumbs.db
 
 # Python
 __pycache__/
+*.pyc
+*.pyo
 *.py[cod]
 .pytest_cache/
 .venv/
@@ -31,4 +33,4 @@ venv/
 
 # Claude local/session outputs
 .claude/settings.local.json
-.claude/context/last_compact_summary.md
+**/.claude/context/last_compact_summary.md

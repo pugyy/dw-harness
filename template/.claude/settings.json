@@ -33,7 +33,7 @@
             "type": "command",
             "command": "python .claude/hooks/inject_context.py",
             "timeout": 10,
-            "statusMessage": "记录 compact 摘要..."
+            "statusMessage": "重注入数仓规范..."
           }
         ]
       }
