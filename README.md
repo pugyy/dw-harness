@@ -62,7 +62,7 @@ python scripts/run_demo.py        # 离线端到端验收
 ```
 
 复制模板模式（v1 风格，命令保留原名）仍然支持：`bash init.sh /your/project`
-（合并式，不再 rm -rf）。v1 升级详见 [docs/upgrade-from-v1.md](docs/upgrade-from-v1.md)。
+（合并式，不再 rm -rf）。v1 升级详见 [中文](docs/upgrade-from-v1.md) / [English](docs/upgrade-from-v1.en.md)。
 
 ## 架构一览
 
@@ -125,7 +125,8 @@ odps/hive/spark/starrocks（SR 的 INSERT 省分区是引擎合法，政策降�
 ## 文档
 
 - [docs/configuration.md](docs/configuration.md) — harness.json / 契约 / 例外 / 证据配置
-- [docs/upgrade-from-v1.md](docs/upgrade-from-v1.md) — v1 → v2 逐项迁移指南 + 命令对照
+- [docs/upgrade-from-v1.md](docs/upgrade-from-v1.md) — v1 → v2 迁移指南（中文）
+- [docs/upgrade-from-v1.en.md](docs/upgrade-from-v1.en.md) — v1 → v2 migration guide (English)
 - [docs/e2e-demo.md](docs/e2e-demo.md) — 端到端验收与真实环境复现步骤
 - [docs/mcp.md](docs/mcp.md) — 本地 MCP server 注册与工具清单
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 变更全录
