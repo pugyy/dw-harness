@@ -1,0 +1,8 @@
+{
+  "name": "odps",
+  "aliases": ["maxcompute"],
+  "engine_notes": "MaxCompute: INSERT on partitioned tables requires explicit PARTITION; ALTER via ADD/CHANGE COLUMN.",
+  "rule_levels": {},
+  "type_aliases": {"string": "string", "decimal": "decimal"},
+  "ddl_keywords": ["PARTITIONED BY", "LIFECYCLE", "COMMENT"]
+}

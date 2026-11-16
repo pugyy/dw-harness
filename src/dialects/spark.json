@@ -1,0 +1,8 @@
+{
+  "name": "spark",
+  "aliases": [],
+  "engine_notes": "Spark SQL: USING <format> or STORED AS on CREATE TABLE.",
+  "rule_levels": {},
+  "type_aliases": {},
+  "ddl_keywords": ["USING", "PARTITIONED BY", "TBLPROPERTIES"]
+}

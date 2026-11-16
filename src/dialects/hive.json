@@ -1,0 +1,8 @@
+{
+  "name": "hive",
+  "aliases": [],
+  "engine_notes": "Hive: STORED AS expected on CREATE TABLE; INSERT OVERWRITE per partition.",
+  "rule_levels": {},
+  "type_aliases": {},
+  "ddl_keywords": ["PARTITIONED BY", "STORED AS", "ROW FORMAT", "TBLPROPERTIES"]
+}

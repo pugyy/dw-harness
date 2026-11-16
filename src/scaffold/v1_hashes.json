@@ -1,0 +1,21 @@
+{
+  ".claude/CLAUDE.md": "20f1fd9fe8730d8cdd8c7936b616f61965c961b2c66a1e67238e758cb32ac861",
+  ".claude/agents/data-comparator/data-comparator.md": "7a800c1dd177202071e1e99dcc94b277422903f935b00ff90efc07b2790fe6b5",
+  ".claude/agents/data-quality-checker/data-quality-checker.md": "109c3e77c77ac1ad87876b32d21ab6d8bc15a6dfb4eef52ac1bc1802dd399dbf",
+  ".claude/agents/dw-explorer/dw-explorer.md": "8c9b75c1220b779c42314373ce2172aecdf528a76b1cb995ad5a0621d6efa2fc",
+  ".claude/agents/sql-validator/sql-validator.md": "aa893a45f2136e34e8a591804d04280cfc7526cabd270fd86faaf4fb48b3bd1f",
+  ".claude/context/0x_conventions.md": "9cbedae359fe6933519ebd55e947e8b1ef0eaecc745cb65fa468ffe17da6fdae",
+  ".claude/hooks/block_dangerous_ddl.py": "2c7cb7e447b0a0bc96b02b8a10bf2ba69129a890252f7cd150dec45698c03792",
+  ".claude/hooks/inject_context.py": "a1f08fc65f748a82422e0949ccff9827c7b025b7a35fbc8ddca0dbd8adde334a",
+  ".claude/hooks/validate_sql.py": "fc7c17ff80457108c82329569b3b32aceb0d35fbc3822e3d30ca6009455f5ae1",
+  ".claude/rules/etl-rules.md": "303528e65012d70e010e90ccdbcfeccb154c7c34e6fd2463bc1ffe0cfb0413d7",
+  ".claude/settings.json": "b8ea0f919ceb729967572287a64a6a080c27120b0ae12409029680a12cbccebb",
+  ".claude/skills/dw-data-comparison/SKILL.md": "24a14ed0c18c8db50a38fe81800bd5e10eb547a2ccddf503321f4e442edf84c1",
+  ".claude/skills/dw-dqc/SKILL.md": "0b535f60bdade5e791e11b3b33823e248823d41468b68dd45efdc74f7976bf67",
+  ".claude/skills/dw-etl/SKILL.md": "c9d4208d673f1a7a9bba92ee225bcf673fd869fa28a77017c37fc237e157b7ec",
+  ".claude/skills/dw-performance-optimization/SKILL.md": "a98b7daa16fe5c068efef64f44e622f3b67e3bc426b61cd06d94361af71c8824",
+  ".claude/skills/dw-requirement-analysis/SKILL.md": "d64c8d5747b99cdce35ff85d13dff12e178648a68ce6443300904c0d757a56b9",
+  ".claude/skills/dw-self-test/SKILL.md": "3f31f7de68ad9d11e0cb85511d7d0af227bf289fd94da88b2321a8f1727d7383",
+  ".claude/skills/dw-sr/SKILL.md": "066bc9729bd2e525e8eb4c3f2684ce0e0960af3069ed1e35e135523c403053d6",
+  ".claude/skills/dw-technical-design/SKILL.md": "0fc85106a90da3e281f79e48a232dbf2246654778d2f3983f87adbe18abac538"
+}
