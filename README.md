@@ -4,6 +4,9 @@ __数仓 AI 编程：装得上（plugin）、管得住（fail-closed 守卫）�
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)
+[![Tests](https://github.com/pugyy/dw-harness/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/pugyy/dw-harness/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/v/release/pugyy/dw-harness)](https://github.com/pugyy/dw-harness/releases)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://github.com/pugyy/dw-harness#install)
 
 > 用 AI 做数仓开发，痛点从来不是"不会写 SQL"，而是：字段口径靠记忆、规范执行靠自觉、
 > 改没改对靠感觉。dw-harness v2 把这三件事全部交给确定性代码：**契约记录口径，
