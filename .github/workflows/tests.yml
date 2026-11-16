@@ -12,15 +12,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # ubuntu-latest (26.04) no longer ships Python 3.9
+        os: [ubuntu-24.04, windows-latest, macos-latest]
         python-version: ["3.9", "3.13"]
     env:
       CI: true
+      PYTHONUTF8: "1"  # Windows runners default to cp1252; tests print UTF-8
+      PYTHONIOENCODING: utf-8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
