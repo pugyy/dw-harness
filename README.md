@@ -10,6 +10,8 @@
 
 **数仓 AI 编程：装得上、管得住、说得清、跑得回。**
 
+**面向 MaxCompute / StarRocks 数仓的 Claude Code 插件 + CLI：SQL 校验、表契约、键级对账、验收证据。**
+
 ## 简介
 
 dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约、SQL 规范、危险操作守卫、键级对账和四态验收报告做成可安装、可配置、可验证的工程层，主线是 MaxCompute → StarRocks，流程沿用 OneData 八步。

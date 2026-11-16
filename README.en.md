@@ -10,6 +10,8 @@
 
 **Data warehouse AI development that installs, enforces checks, and leaves evidence.**
 
+**A Claude Code plugin + CLI for MaxCompute / StarRocks warehouses: SQL lint, table contracts, key-level reconciliation and acceptance evidence.**
+
 ## What it is
 
 dw-harness is a Claude Code plugin and CLI for data warehouse teams. It packages table contracts, SQL conventions, dangerous-operation guards, key-level reconciliation and a four-state acceptance report into an installable, configurable and verifiable engineering layer. The mainline is MaxCompute → StarRocks; the workflow follows the OneData eight steps.
