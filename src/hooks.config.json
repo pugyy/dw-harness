@@ -13,9 +13,6 @@
     "PostCompact": [
       {"matcher": "manual|auto", "script": "post_compact.py", "timeout": 10}
     ],
-    "FileChanged": [
-      {"matcher": "**/*.sql", "script": "file_changed.py", "timeout": 30}
-    ],
     "SessionEnd": [
       {"script": "handoff.py", "timeout": 10}
     ]

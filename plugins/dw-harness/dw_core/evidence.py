@@ -36,20 +36,39 @@ def git_commit(root: Path) -> Optional[str]:
 
 def build_evidence(name: str, inputs: Dict[str, str], result_summary: Dict,
                    root: Path, environments: Optional[Dict] = None,
-                   artifacts: Optional[List[str]] = None) -> Dict:
+                   artifacts: Optional[List[str]] = None,
+                   producer: str = "manual",
+                   binding_paths: Optional[Dict[str, str]] = None) -> Dict:
     ts = datetime.now(timezone.utc)
-    return {
+    evidence = {
         "schema": EVIDENCE_SCHEMA,
         "name": name,
+        "producer": producer,  # dw-reconcile | dw-check | ci | manual
         "tool_version": __version__,
         "timestamp": ts.isoformat(timespec="seconds"),
         "commit": git_commit(root),
-        "inputs": inputs,  # {role: digest}
+        "inputs": inputs,  # {role: digest}; canonical roles: contract, ddl:<name>, sql:<name>, reconcile:spec
+        "binding_paths": binding_paths or {},  # {role: path} so verifiers recompute the same digests
         "policy_digest": inputs.get("policy", ""),
         "result_summary": result_summary,
         "environments": environments or {},
         "artifacts": artifacts or [],
+        "hand_edited": False,
     }
+    evidence["signature"] = _sign(evidence)
+    return evidence
+
+
+def _sign(evidence: Dict) -> str:
+    """Optional HMAC (key from DW_HARNESS_EVIDENCE_KEY env only)."""
+    import hmac as _hmac
+    key = os.environ.get("DW_HARNESS_EVIDENCE_KEY", "")
+    if not key:
+        return ""
+    basis = json.dumps({k: v for k, v in evidence.items() if k != "signature"},
+                       sort_keys=True, ensure_ascii=False)
+    return _hmac.new(key.encode("utf-8"), basis.encode("utf-8"),
+                     "sha256").hexdigest()
 
 
 def save_evidence(evidence: Dict, root: Path, name: str) -> Path:
@@ -73,11 +92,31 @@ def load_evidence(root: Path, name: str) -> Optional[Dict]:
 
 
 def verify_evidence(evidence: Optional[Dict], current_inputs: Dict[str, str],
-                    freshness_hours: int = 72) -> Dict:
-    """Stale when any input digest differs, is missing, or TTL expired."""
+                    freshness_hours: int = 72, strict: bool = False) -> Dict:
+    """Stale when any input digest differs, is missing, or TTL expired.
+
+    Strict mode additionally rejects evidence without a trusted producer:
+    hand-written PASS files (producer=manual / hand_edited) are display-only
+    and can never gate a strict CI check. When an HMAC key is configured,
+    a bad or absent signature is untrusted regardless of mode.
+    """
     if not evidence:
         return {"state": "missing", "reason": "no evidence recorded"}
     problems: List[str] = []
+    if evidence.get("hand_edited"):
+        return {"state": "untrusted", "reason": workspace_edited_warning(evidence) or
+                "evidence flagged as hand-edited"}
+    key = os.environ.get("DW_HARNESS_EVIDENCE_KEY", "")
+    if key:
+        expected = _sign({k: v for k, v in evidence.items() if k != "signature"})
+        if evidence.get("signature", "") != expected:
+            return {"state": "untrusted",
+                    "reason": "HMAC signature mismatch (key configured, signature invalid/absent)"}
+    if strict and str(evidence.get("producer", "manual")) == "manual":
+        return {"state": "untrusted",
+                "reason": "producer=manual: strict mode only accepts evidence from "
+                          "deterministic producers (dw-reconcile/dw-check/ci); "
+                          "re-run the command or configure DW_HARNESS_EVIDENCE_KEY"}
     for role, digest in current_inputs.items():
         recorded = (evidence.get("inputs") or {}).get(role)
         if not recorded:

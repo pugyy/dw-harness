@@ -1,3 +1,6 @@
+> **v2 更新（2026-11-16）**：八步流程保留，命令在插件模式下带 `dw-harness:` 前缀（模板模式保留裸名）。
+> 每步的交付物与验收由 `/dw-next` 与 `dw check` 从文件证据判定；命令对照见 docs/upgrade-from-v1.md。
+
 # 八步标准流程 / 8-Step Standard Workflow
 
 数仓研发流程 / DW development workflow:

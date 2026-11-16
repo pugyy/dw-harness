@@ -32,8 +32,8 @@ from . import __version__
 from .check import CheckItem, CheckReport
 from .config import HarnessConfig
 from .contracts import load_contract, normalize
-from .evidence import (build_evidence, load_evidence, save_evidence,
-                       text_digest, verify_evidence)
+from .evidence import (build_evidence, file_digest, load_evidence,
+                       save_evidence, text_digest, verify_evidence)
 from .guard import GuardEngine
 from .reconcile import ReconcileSpec, reconcile
 from .rules import lint_sql
@@ -163,10 +163,13 @@ def run_demo(fixtures: Optional[Path] = None, out_dir: Optional[Path] = None) ->
           f"diffs={[d['key'] for d in tol.diffs]}")
 
     # ---- (d) stale evidence --------------------------------------------------
-    inputs = {"contract": text_digest(json.dumps(current, sort_keys=True)),
+    inputs = {"contract": file_digest(workspace / "contracts" / "contract.json"),
               "sql:insert_orders.sql": text_digest(good_sql)}
     ev = build_evidence("reconcile-db_a.dws_trade_order_di", inputs,
-                        {"status": "pass"}, workspace)
+                        {"status": "pass"}, workspace, producer="dw-reconcile",
+                        binding_paths={
+                            "contract": str(workspace / "contracts" / "contract.json"),
+                            "sql:insert_orders.sql": str(fixtures / "insert_orders.sql")})
     save_evidence(ev, workspace, "reconcile-db_a.dws_trade_order_di")
     fresh = verify_evidence(
         load_evidence(workspace, "reconcile-db_a.dws_trade_order_di"), inputs)
@@ -181,6 +184,14 @@ def run_demo(fixtures: Optional[Path] = None, out_dir: Optional[Path] = None) ->
                                   "evidence stale: " + stale["reason"]))
     _case("(d) strict mode exits 2 on unverified", report.exit_code == 2,
           f"exit={report.exit_code}")
+
+    # ---- (d2) hand-written PASS cannot gate strict mode --------------------
+    manual = dict(ev)
+    manual["producer"] = "manual"
+    manual["signature"] = ""
+    manual_state = verify_evidence(manual, inputs, strict=True)
+    _case("(d2) manual/hand-written PASS rejected in strict mode",
+          manual_state["state"] == "untrusted", json.dumps(manual_state))
 
     # ---- (e) guard decisions ---------------------------------------------------
     engine = GuardEngine(config, env={"DW_HARNESS_PROD": "1"})

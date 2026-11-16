@@ -42,3 +42,6 @@ __pycache__/
 dist/
 build/
 examples/demo/report/
+
+# local scanner artifacts
+.mimosa/

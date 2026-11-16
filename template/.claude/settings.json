@@ -75,21 +75,6 @@
         ]
       }
     ],
-    "FileChanged": [
-      {
-        "matcher": "**/*.sql",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/file_changed.py"
-            ],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
       {
         "hooks": [

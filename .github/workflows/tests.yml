@@ -40,5 +40,5 @@ jobs:
           dw --version
           python scripts/run_demo.py
 
-      - name: Doctor smoke
-        run: dw doctor || true
+      - name: Doctor smoke (repo checkout resolves to plugin mode; must pass)
+        run: dw doctor

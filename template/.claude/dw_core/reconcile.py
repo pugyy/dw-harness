@@ -75,6 +75,15 @@ class FileAdapter:
         return rows, truncated
 
 
+def _q(identifier: str) -> str:
+    """Re-validate an identifier against the allowlist before it may appear
+    in a query string. Identifiers cannot be parameter-bound; values can and
+    always are. Raises instead of returning anything unvalidated."""
+    if not IDENT_RE.match(identifier or ""):
+        raise ReconcileError(f"identifier rejected (allowlist): {identifier!r}")
+    return identifier
+
+
 class _DbAdapter:
     kind = "db"
 
@@ -86,15 +95,23 @@ class _DbAdapter:
         self.metrics = metrics
         self.timeout = timeout
         for ident in [self.table, self.partition_column, *keys, *metrics]:
-            if not IDENT_RE.match(ident or ""):
-                raise ReconcileError(f"identifier rejected (allowlist): {ident!r}")
+            _q(ident)
 
     def partition_exists(self) -> bool:
-        return True  # db adapters confirm inside fetch via partition filter
+        """Real check: COUNT under the partition predicate (value is bound).
+
+        A missing partition and an empty-but-present partition are distinct;
+        both surface through prechecks instead of silently comparing equal.
+        """
+        count = self.partition_count()
+        return count is not None
+
+    def partition_count(self) -> Optional[int]:
+        raise ReconcileError("partition_count not implemented for this adapter")
 
 
 class MaxComputeAdapter(_DbAdapter):
-    def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
+    def _connect(self):
         try:
             from odps import ODPS  # type: ignore
         except ImportError as exc:
@@ -103,13 +120,34 @@ class MaxComputeAdapter(_DbAdapter):
                 "(pip install dw-harness[odps]) and read-only credentials from "
                 "DW_HARNESS_ODPS_ACCESS_ID / _ACCESS_KEY / _PROJECT / _ENDPOINT env vars") from exc
         import os
-        o = ODPS(os.environ["DW_HARNESS_ODPS_ACCESS_ID"],
-                 os.environ["DW_HARNESS_ODPS_ACCESS_KEY"],
-                 project=os.environ["DW_HARNESS_ODPS_PROJECT"],
-                 endpoint=os.environ["DW_HARNESS_ODPS_ENDPOINT"])
-        cols = ", ".join([*self.keys, *self.metrics])
-        sql = (f"SELECT {cols} FROM {self.table} "
-               f"WHERE {self.partition_column} = %s LIMIT %d")
+        for var in ("DW_HARNESS_ODPS_ACCESS_ID", "DW_HARNESS_ODPS_ACCESS_KEY",
+                    "DW_HARNESS_ODPS_PROJECT", "DW_HARNESS_ODPS_ENDPOINT"):
+            if not os.environ.get(var):
+                raise ReconcileError(f"missing read-only credential env var: {var}")
+        return ODPS(os.environ["DW_HARNESS_ODPS_ACCESS_ID"],
+                    os.environ["DW_HARNESS_ODPS_ACCESS_KEY"],
+                    project=os.environ["DW_HARNESS_ODPS_PROJECT"],
+                    endpoint=os.environ["DW_HARNESS_ODPS_ENDPOINT"])
+
+    def partition_count(self) -> Optional[int]:
+        o = self._connect()
+        sql = " ".join([
+            "SELECT COUNT(*) AS cnt FROM", _q(self.table),
+            "WHERE", _q(self.partition_column), "= %s",
+        ])
+        with o.execute_sql(sql, params=(self.partition,)).open_reader(tunnel=True) as reader:
+            for record in reader:
+                values = record.values if hasattr(record, "values") else record
+                return int(values.get("cnt", list(values)[0]) if isinstance(values, dict) else values[0])
+        return None
+
+    def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
+        o = self._connect()
+        cols = ", ".join(_q(c) for c in [*self.keys, *self.metrics])
+        sql = " ".join([
+            "SELECT", cols, "FROM", _q(self.table),
+            "WHERE", _q(self.partition_column), "= %s LIMIT %d",
+        ])
         params = (self.partition, limit + 1)
         with o.execute_sql(sql, params=params).open_reader(tunnel=True) as reader:  # parameter binding
             rows = [dict(r.values) for r in reader]
@@ -117,7 +155,7 @@ class MaxComputeAdapter(_DbAdapter):
 
 
 class StarRocksAdapter(_DbAdapter):
-    def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
+    def _connect(self):
         try:
             import pymysql  # type: ignore
         except ImportError as exc:
@@ -126,7 +164,11 @@ class StarRocksAdapter(_DbAdapter):
                 "(pip install dw-harness[sr]) and read-only credentials from "
                 "DW_HARNESS_SR_HOST / _PORT / _USER / _PASSWORD / _DATABASE env vars") from exc
         import os
-        conn = pymysql.connect(
+        for var in ("DW_HARNESS_SR_HOST", "DW_HARNESS_SR_USER",
+                    "DW_HARNESS_SR_PASSWORD", "DW_HARNESS_SR_DATABASE"):
+            if not os.environ.get(var):
+                raise ReconcileError(f"missing read-only credential env var: {var}")
+        return pymysql.connect(
             host=os.environ["DW_HARNESS_SR_HOST"],
             port=int(os.environ.get("DW_HARNESS_SR_PORT", "9030")),
             user=os.environ["DW_HARNESS_SR_USER"],
@@ -136,6 +178,24 @@ class StarRocksAdapter(_DbAdapter):
             read_timeout=self.timeout,
             cursorclass=pymysql.cursors.DictCursor,
         )
+
+    def partition_count(self) -> Optional[int]:
+        # identifiers allowlist-validated in __init__; partition VALUE bound
+        conn = self._connect()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) AS cnt FROM {table} "
+                    "WHERE {part_col} = %s".format(table=_q(self.table),
+                                                   part_col=_q(self.partition_column)),
+                    (self.partition,))  # parameter binding
+                row = cursor.fetchone()
+                return int(row["cnt"]) if row else None
+        finally:
+            conn.close()
+
+    def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
+        conn = self._connect()
         cols = ", ".join([f"`{c}`" for c in [*self.keys, *self.metrics]])
         try:
             with conn.cursor() as cursor:
@@ -290,6 +350,12 @@ def reconcile(spec: ReconcileSpec) -> ReconcileResult:
     result.diffs = diffs
     result.null_mismatches = null_mis[:spec.sample_rows]
 
+    if result.truncated:
+        # row limit hit: never upgrade to pass; distinguishable outcome (spec 14)
+        result.status = "unverified"
+        result.reasons.append("row limit reached: totals/key-level results computed on a "
+                              "truncated window only")
+        return result
     if missing_left or missing_right:
         result.status = "fail"
         result.reasons.append("business keys present on one side only")
@@ -302,5 +368,6 @@ def reconcile(spec: ReconcileSpec) -> ReconcileResult:
                               f"(samples capped at {spec.sample_rows})")
     if result.status == "unverified":
         result.status = "pass"
-        result.reasons.append("rows, totals and per-key comparisons within tolerance")
+        result.reasons.append("rows, totals and per-key comparisons within tolerance "
+                              "over the full (untruncated) window")
     return result

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,31 +23,47 @@ V1_HOOK_COMMANDS = [
 
 V2_TEMPLATE_HOOKS = {
     "PreToolUse": [
-        {"matcher": "Bash|PowerShell",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_shell.py"], "timeout": 20, "onFailure": "block"}]},
-        {"matcher": "Write|Edit",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_write.py"], "timeout": 20, "onFailure": "block"}]},
+        {"matcher": "Bash|PowerShell", "script": "guard_shell.py", "timeout": 20, "onFailure": "block"},
+        {"matcher": "Write|Edit", "script": "guard_write.py", "timeout": 20, "onFailure": "block"},
     ],
     "PostToolUse": [
-        {"matcher": "Write|Edit",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/validate_post.py"], "timeout": 60}]},
+        {"matcher": "Write|Edit", "script": "validate_post.py", "timeout": 60},
     ],
     "SessionStart": [
-        {"matcher": "startup|resume|clear|compact",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/session_context.py"], "timeout": 10}]},
+        {"matcher": "startup|resume|clear|compact", "script": "session_context.py", "timeout": 10},
     ],
     "PostCompact": [
-        {"matcher": "manual|auto",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/post_compact.py"], "timeout": 10}]},
-    ],
-    "FileChanged": [
-        {"matcher": "**/*.sql",
-         "hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/file_changed.py"], "timeout": 30}]},
+        {"matcher": "manual|auto", "script": "post_compact.py", "timeout": 10},
     ],
     "SessionEnd": [
-        {"hooks": [{"type": "command", "command": "${python}", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/handoff.py"], "timeout": 10}]},
+        {"script": "handoff.py", "timeout": 10},
     ],
 }
+
+
+def _split_python(python: str) -> Tuple[List[str], List[str]]:
+    """'python' -> (['python'], []); 'py -3' -> (['py'], ['-3']);
+    'C:\\Py39\\python.exe' stays one executable. No JSON string surgery."""
+    try:
+        parts = shlex.split(python, posix=False)
+    except ValueError:
+        parts = python.split()
+    parts = [p.strip('"\'') for p in parts if p.strip()]
+    if not parts:
+        parts = ["python"]
+    return parts[:1], parts[1:]
+
+
+def _v2_hook_block(block: Dict, python: str) -> Dict:
+    exe, extra = _split_python(python)
+    hook = {"type": "command", "command": exe[0],
+            "args": [*extra, "${CLAUDE_PROJECT_DIR}/.claude/hooks/" + block["script"]],
+            "timeout": block.get("timeout", 30)}
+    if "onFailure" in block:
+        hook["onFailure"] = block["onFailure"]
+    entry = {"matcher": block["matcher"]} if block.get("matcher") else {}
+    entry["hooks"] = [hook]
+    return entry
 
 COMMAND_MAP = [
     ("/dw-requirement-analysis", "/dw-harness:dw-requirement-analysis"),
@@ -93,7 +110,7 @@ def _write_managed(root: Path, index: Dict[str, str]) -> None:
 
 
 def merge_settings(target: Path, python: str, dry_run: bool,
-                    report: MigrationReport) -> None:
+                   report: MigrationReport, statusline: bool = False) -> None:
     settings_path = target / ".claude" / "settings.json"
     settings: Dict = {}
     if settings_path.is_file():
@@ -104,6 +121,10 @@ def merge_settings(target: Path, python: str, dry_run: bool,
                                     f"merge hooks manually")
             return
     hooks = settings.get("hooks") or {}
+    # drop v1 entries, remember which v2 scripts are already wired (by script
+    # identity, NOT by matcher: a user hook on the same matcher must never
+    # silently suppress our guards)
+    wired_scripts = set()
     for event, entries in list(hooks.items()):
         kept = []
         for entry in entries:
@@ -112,21 +133,28 @@ def merge_settings(target: Path, python: str, dry_run: bool,
             if any(v1 in joined for v1 in V1_HOOK_COMMANDS):
                 report.removed_v1_hooks.append(f"{event}: {joined[:80]}")
                 continue
+            for hook in entry.get("hooks", []):
+                for arg in hook.get("args", []) or []:
+                    name = Path(str(arg)).name
+                    if str(arg).endswith(".py") and "/" in str(arg):
+                        wired_scripts.add(name)
             kept.append(entry)
         if kept:
             hooks[event] = kept
         else:
             hooks.pop(event, None)
-    for event, wanted in V2_TEMPLATE_HOOKS.items():
+    for event, blocks in V2_TEMPLATE_HOOKS.items():
         existing = hooks.setdefault(event, [])
-        have_matchers = {json.dumps(e.get("matcher", ""), sort_keys=True) for e in existing}
-        for block in wanted:
-            key = json.dumps(block.get("matcher", ""), sort_keys=True)
-            if key in have_matchers:
-                continue  # idempotent: never append a second block for same matcher
-            block = json.loads(json.dumps(block).replace("${python}", python))
-            existing.append(block)
+        for block in blocks:
+            if block["script"] in wired_scripts:
+                continue  # idempotent: our own hook already present
+            existing.append(_v2_hook_block(block, python))
     settings["hooks"] = hooks
+    if statusline and "statusLine" not in settings:
+        exe, extra = _split_python(python)
+        settings["statusLine"] = {"type": "command", "command": exe[0],
+                                  "args": [*extra, "${CLAUDE_PROJECT_DIR}/.claude/hooks/statusline.py"]}
+        report.actions.append("settings.json: dw statusLine added (user statusLine absent)")
     if not dry_run:
         if settings_path.is_file():
             shutil.copy2(settings_path, settings_path.with_name(
@@ -198,7 +226,7 @@ def merge_claude_md(target: Path, source_dir: Path, dry_run: bool,
 
 def run_init(target: Path, template_root: Path, python: str, dialect: str,
              dry_run: bool = False, v1_hashes: Optional[Dict[str, str]] = None,
-             mcp: bool = False) -> MigrationReport:
+             mcp: bool = False, statusline: bool = False) -> MigrationReport:
     """Merge-install the copy-template form into *target*.
 
     *template_root* is the generated ``template/`` directory: CLAUDE.md /
@@ -206,7 +234,7 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
     """
     report = MigrationReport()
     v1_hashes = v1_hashes or {}
-    merge_settings(target, python, dry_run, report)
+    merge_settings(target, python, dry_run, report, statusline=statusline)
     merge_claude_md(target, template_root, dry_run, report)
     tree: List[Tuple[str, str]] = [
         ("AGENTS.md", "AGENTS.md"),

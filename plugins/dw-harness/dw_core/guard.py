@@ -99,9 +99,18 @@ class GuardEngine:
             return self._finish("PreToolUse:Bash", command,
                                 GuardDecision("allow",
                                               reasons=["not a registered database client; SQL guard not applicable"]))
+        unreadable = [origin for origin, sql in sql_sources if sql is None]
         if not sql_sources:
             decision = self._unknown_write_policy(
                 f"'{client}' invocation carries no recognizable inline SQL or -f script")
+            return self._finish("PreToolUse:Bash", command, decision)
+        if unreadable:
+            # a -f target we could not read: range undeterminable -> env policy
+            decision = self._unknown_write_policy(
+                f"'{client}' references unreadable script(s) {', '.join(unreadable)}: "
+                f"target and scope cannot be verified")
+            if decision.decision == "allow":
+                decision = GuardDecision("ask", reasons=decision.reasons)
             return self._finish("PreToolUse:Bash", command, decision)
         reasons: List[str] = []
         exceptions_hit: List[str] = []
@@ -168,8 +177,11 @@ class GuardEngine:
             argv = command.split()
         if not argv:
             return "", []
-        exe = Path(argv[0]).name.lower().strip('"')
-        if exe not in DB_CLIENTS:
+        raw_exe = argv[0]
+        exe = Path(raw_exe).name.lower().strip('"')
+        stem = Path(raw_exe).stem.lower().strip('"')
+        # Windows wrappers: odpscmd.exe / beeline.cmd / hive.bat all count
+        if exe not in DB_CLIENTS and stem not in DB_CLIENTS:
             return "", []
         sources: List[Tuple[str, str]] = []
         i = 1
@@ -182,11 +194,12 @@ class GuardEngine:
                     script = cwd / script
                 if script.is_file():
                     try:
-                        sources.append((f"file:{script.name}", script.read_text(encoding="utf-8-sig", errors="replace")))
+                        sources.append((f"file:{script.name}",
+                                        script.read_text(encoding="utf-8-sig", errors="replace")))
                     except OSError:
-                        pass
+                        sources.append((f"file:{script.name}", None))  # unreadable
                 else:
-                    sources.append((f"file:{argv[i + 1]}", ""))  # unreadable -> unknown
+                    sources.append((f"file:{argv[i + 1]}", None))  # missing -> unknown policy
                 i += 2
                 continue
             if arg in _EXEC_ARGS and i + 1 < len(argv):
@@ -210,7 +223,7 @@ class GuardEngine:
         table = _target_table(code)
         low = code.lstrip().lower()
         if re.search(r"\bdrop\s+(table|database)\b", code, re.I) or re.search(r"\btruncate\s+table\b", code, re.I) \
-                or re.search(r"\balter\s+table\b[\s\S]*?\bdrop\s+column\b", code, re.I):
+                or re.search(r"\balter\s+table\b[\s\S]*?\bdrop\s+(column|partition)\b", code, re.I):
             flags["destructive"] = "destructive DDL detected"
         elif re.search(r"\bdelete\s+from\b", code, re.I) and not re.search(r"\bwhere\b", code, re.I):
             flags["destructive"] = "DELETE without WHERE"

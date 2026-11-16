@@ -3,7 +3,7 @@ name: dw-explorer
 description: >
   数仓结构探索：读表 DDL/字段/分区、一跳血缘、识别金额与分区字段，
   只读不写，输出 ≤80 行结构化摘要。需要了解表结构或上下游时使用。
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash(dw impact:*), Bash(dw lint:*), Bash(dw next:*)
 model: inherit
 maxTurns: 12
 memory: project

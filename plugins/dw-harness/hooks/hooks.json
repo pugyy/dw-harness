@@ -75,21 +75,6 @@
         ]
       }
     ],
-    "FileChanged": [
-      {
-        "matcher": "**/*.sql",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${user_config.python}",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/file_changed.py"
-            ],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
       {
         "hooks": [

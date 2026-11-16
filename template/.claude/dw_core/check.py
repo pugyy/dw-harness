@@ -102,6 +102,7 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
                partition: str = "", sql_files: Optional[List[Path]] = None,
                contract_path: Optional[Path] = None, ddl_path: Optional[Path] = None,
                dqc_path: Optional[Path] = None, baseline: Optional[Path] = None,
+               reconcile_spec: Optional[Path] = None,
                mode: str = "strict") -> CheckReport:
     report = CheckReport(table=table, environment=environment,
                          partition=partition, mode=mode)
@@ -141,7 +142,7 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
     else:
         try:
             contract, _ = load_contract(contract_path)
-            inputs["contract"] = text_digest(json.dumps(contract, sort_keys=True))
+            inputs["contract"] = file_digest(contract_path)
         except Exception as exc:  # noqa: BLE001 - report, don't crash acceptance
             report.items.append(_item("contract-validate", "fail", f"contract unreadable: {exc}"))
             contract = None
@@ -219,18 +220,50 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
 
     # ---- reconcile evidence -------------------------------------------------
     ev = load_evidence(root, f"reconcile-{table}")
-    fresh = verify_evidence(ev, {k: v for k, v in inputs.items()
-                                 if k.startswith(("sql", "contract", "ddl"))} or {"any": inputs.get("contract", "")},
-                            freshness_hours=int(config.data.get("evidence", {}).get("freshness_hours", 72)))
+    spec_path = reconcile_spec
+    if spec_path is None:
+        candidates = sorted(root.glob("reconcile_*.json"))
+        spec_path = candidates[0] if len(candidates) == 1 else None
+    current: Dict[str, str] = {}
+    binding_paths = (ev or {}).get("binding_paths") or {}
+    if binding_paths:
+        # recompute exactly the digests the producer bound (recorded paths)
+        for role, raw_path in binding_paths.items():
+            p = Path(raw_path)
+            if not p.is_absolute():
+                p = root / p
+            current[role] = file_digest(p) if p.is_file() else f"missing:{raw_path}"
+    else:
+        current = {k: v for k, v in inputs.items()
+                   if k == "contract" or k.startswith(("sql:", "ddl:"))}
+    if spec_path is not None and spec_path.is_file():
+        # same normalized basis the CLI producer records (defaults filled in)
+        from .reconcile import ReconcileSpec
+        try:
+            spec_raw = json.loads(spec_path.read_text(encoding="utf-8-sig"))
+            spec_keys = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
+            spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
+            current["reconcile:spec"] = text_digest(json.dumps(spec.to_dict(), sort_keys=True))
+        except (json.JSONDecodeError, TypeError, KeyError):
+            current["reconcile:spec"] = text_digest(spec_path.read_text(encoding="utf-8-sig"))
+    fresh = verify_evidence(ev, current,
+                            freshness_hours=int(config.data.get("evidence", {}).get(
+                                "freshness_hours", 72)),
+                            strict=(mode == "strict"))
     if ev is None:
         report.items.append(_item("reconcile", "unverified",
                                   "no reconciliation evidence for this table/partition"))
+    elif fresh["state"] == "untrusted":
+        report.items.append(_item("reconcile", "unverified",
+                                  f"evidence untrusted: {fresh['reason']}; "
+                                  f"re-run `dw reconcile --save-evidence` (deterministic producer)"))
     elif fresh["state"] != "valid":
         report.items.append(_item("reconcile", "unverified",
                                   f"evidence stale: {fresh['reason']}; re-run `dw reconcile`"))
     elif (ev.get("result_summary") or {}).get("status") == "pass":
         report.items.append(_item("reconcile", "pass",
-                                  "key-level comparison within tolerance",
+                                  "key-level comparison within tolerance "
+                                  f"(producer={ev.get('producer', 'unknown')})",
                                   evidence=f".claude/dw/evidence/reconcile-{table}.json"))
     else:
         report.items.append(_item("reconcile", "fail",

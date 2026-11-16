@@ -1,3 +1,6 @@
+> **v2 更新（2026-11-16）**：下表命令在插件模式下为 `/dw-harness:dw-*`（模板模式保留裸名）。
+> v2 新增 dw-bootstrap / dw-contract / dw-check / dw-next / dw-review / dw-backfill / dw-sql-reference（自动加载）。
+
 # Skill 命令手册 / Skill Command Reference
 
 `dw-harness` 的 skills 使用 Claude Code 标准结构 / dw-harness skills use the standard Claude Code structure:

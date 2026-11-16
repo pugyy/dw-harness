@@ -56,6 +56,7 @@ v2 新增：`dw-bootstrap`、`dw-contract`、`dw-check`、`dw-next`、`dw-review
 
 ```bash
 dw doctor          # 期望: python-version/config/hook-scripts/settings-wiring 全 OK
+                   # --statusline 可选开启 dw 状态栏（已有用户状态栏则不动）
                    # app-wiring-verified 显示未验证是正常的——首次真实 Claude Code
                    # 会话跑过之后，按 docs/e2e-demo.md 写入 wiring_verified.json
 dw next            # 看看八步进度推断是否符合预期

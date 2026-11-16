@@ -1,6 +1,8 @@
 {
   "name": "dw-harness",
-  "owner": "pugyy",
+  "owner": {
+    "name": "pugyy"
+  },
   "plugins": [
     {
       "name": "dw-harness",

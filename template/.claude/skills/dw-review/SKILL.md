@@ -3,7 +3,7 @@ name: dw-review
 description: >
   上线前 SQL/契约评审清单：字段口径比对、注释三段式、生命周期、
   分区策略、金额单位一致性。适用于提 PR 前自查或人肉评审辅助。
-allowed-tools: Read, Grep, Glob, Bash(dw lint:*, dw contract:*, dw check:*)
+allowed-tools: Read, Grep, Glob, Bash(dw lint:*), Bash(dw contract:*), Bash(dw check:*)
 ---
 
 # dw-review：上线前评审清单

@@ -32,6 +32,7 @@
 | 能力 | 最低版本 |
 |---|---|
 | 插件 userConfig `options` 枚举 | 2.1.271 |
+| **整体声明最低版本（含 hook `onFailure` fail-closed）** | **2.1.295** |
 | AGENTS.md 原生读取（CLAUDE.md 优先） | 2.1.277 |
 | hook `onFailure: block` fail-closed | Agent SDK 0.3.3.317 同期 CLI 版本；低版本由脚本内 fail-closed 兜底 |
 

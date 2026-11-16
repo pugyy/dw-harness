@@ -5,7 +5,8 @@ description: >
   防止大量检查输出污染主对话。适用于 ETL 完成后验证数据质量。
 argument-hint: "[表名] [分区日期]"
 context: fork
-allowed-tools: Read, Grep, Glob, Bash(dw lint:*, dw check:*)
+agent: dw-harness:data-quality-checker
+allowed-tools: Read, Grep, Glob, Bash(dw lint:*), Bash(dw check:*)
 ---
 
 # Step 4: 自测（fork 隔离运行）

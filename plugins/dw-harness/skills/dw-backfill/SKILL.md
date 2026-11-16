@@ -4,7 +4,7 @@ description: >
   历史回填预演：目标环境、分区范围、幂等策略、检查点与扫描估算，
   预演阶段只读不落盘。适用于需要重刷历史分区时。
 argument-hint: "[表名] [开始分区] [结束分区]"
-allowed-tools: Read, Glob, Bash(dw plan:*, dw reconcile:*)
+allowed-tools: Read, Glob, Bash(dw plan:*), Bash(dw reconcile:*)
 ---
 
 # dw-backfill：回填预演（只读）

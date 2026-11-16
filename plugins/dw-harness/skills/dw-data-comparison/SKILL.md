@@ -5,7 +5,8 @@ description: >
   只回收差异摘要。适用于自测通过后与基线数据核对。
 argument-hint: "[表名] [分区日期] [基线表]"
 context: fork
-allowed-tools: Read, Grep, Glob, Bash(dw reconcile:*, dw check:*)
+agent: dw-harness:data-comparator
+allowed-tools: Read, Grep, Glob, Bash(dw reconcile:*), Bash(dw check:*)
 ---
 
 # Step 5: 数据比对（键级对账）

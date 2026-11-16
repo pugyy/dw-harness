@@ -1,6 +1,23 @@
 # Changelog
 
-## 2.0.0 (2026-11-16) — 大版本重构：可安装、可配置、可验证
+## 2.0.0 (2026-11-16, rev2) — 大版本重构：可安装、可配置、可验证
+
+### rc.1 审计修正（rev2）
+
+- 证据链生产/校验统一 canonical 角色（contract / sql:<name> / ddl:<name> / reconcile:spec），`dw reconcile --save-evidence` 的证据可被 `dw check` 直接过账（端到端测试覆盖）
+- 证据信任边界：producer 字段（dw-reconcile/dw-check/ci/manual），strict 模式拒绝 manual 与 hand_edited；可选 HMAC（DW_HARNESS_EVIDENCE_KEY）
+- 对账截断强制 UNVERIFIED，不再可能翻成 PASS
+- marketplace `owner` 修正为对象结构
+- 最低 Claude Code 版本改为 2.1.295（onFailure 所需）；doctor 实测 `claude --version`
+- 迁移按 hook 脚本身份去重：用户同 matcher hook 不再静默抑制安全守卫
+- `--python` 结构化替换：Windows 绝对路径 / `py -3`（拆 command+args）/ 中文路径均安全
+- 不可读/缺失的 `-f` 脚本按 unknown 策略处理（dev ask / prod deny），不再放行；识别 `.exe/.cmd/.bat` 客户端包装；`ALTER TABLE ... DROP PARTITION` 计入破坏性
+- 移除 FileChanged 死接线（glob matcher 按官方语义是字面文件名）；out-of-band 检查改由 `dw lint --changed` 承担
+- doctor 区分 plugin/template 模式（repo checkout 自动按插件形态检查），CI 不再 `|| true`
+- skills `allowed-tools` 逗号语法修正为独立规则；self-test/data-comparison 绑定专用 agent；dw-explorer Bash 命令级收窄；新增 statusline（`dw init --statusline`）
+- `dw check --changed` / `dw lint --changed` 变更集批量模式；`dw contract diff --baseline git:<rev>:<path>` Git 基线
+- DB 适配器 partition_exists 实测 COUNT（参数绑定），空分区与缺分区可区分
+- 清理误提交的 .mimosa/（历史重写移除）
 
 单源重构 + 插件分发 + 表契约 + 键级对账 + 四态验收。v1 用户的八步流程、
 OneData 背景、MaxCompute → StarRocks 主线全部保留；升级路径见
@@ -62,8 +79,7 @@ docs/upgrade-from-v1.md。
   新增 bootstrap/contract/check/next/review/backfill + 按路径自动加载的 sql-reference
 - 4 个 subagent 平铺：model: inherit、tools 收窄、memory: project、maxTurns；
   不再依赖 plugin 环境下会被忽略的 permissionMode
-- SessionStart 注入 ≤2000 字会话状态卡；PostCompact 只落盘；FileChanged 兜住
-  out-of-band 修改；SessionEnd 写 handoff.md
+- SessionStart 注入 ≤2000 字会话状态卡；PostCompact 只落盘；SessionEnd 写 handoff.md
 - AGENTS.md 承载跨工具共享规范，CLAUDE.md 显式 `@AGENTS.md` 引用
 
 ### 测试 / CI / 文档

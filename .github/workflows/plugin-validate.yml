@@ -28,16 +28,22 @@ jobs:
             echo "claude CLI not present on runner; skipping live validation"
           fi
 
-      - name: Load plugin from local dir (headless)
+      - name: Load plugin from local dir (headless, must succeed)
         if: steps.claude.outputs.available == 'true'
         run: |
           claude -p "reply with the word ok" --plugin-dir ./plugins/dw-harness
+
+      - name: Marketplace add + manifest validation (must succeed)
+        if: steps.claude.outputs.available == 'true'
+        run: |
+          claude plugin marketplace add .
+          claude plugin validate ./plugins/dw-harness
 
       - name: Trigger write-after feedback (headless wiring check)
         if: steps.claude.outputs.available == 'true'
         run: |
           claude -p "write the file bad_star.sql with exactly: SELECT t.* FROM db.t; then stop" \
-            --plugin-dir ./plugins/dw-harness || true
+            --plugin-dir ./plugins/dw-harness
           # the PostToolUse hook must have flagged no-select-star in the transcript;
           # manual verification step documented in docs/e2e-demo.md
 

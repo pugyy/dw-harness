@@ -26,23 +26,33 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dialect", default="", help="default SQL dialect")
     p.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
     p.add_argument("--mcp", action="store_true", help="register the local stdio MCP server")
+    p.add_argument("--statusline", action="store_true",
+                   help="add the dw statusLine entry (keeps an existing user statusLine)")
     p.add_argument("--scaffold", default="", help="scaffold dir (default: bundled)")
 
     p = sub.add_parser("doctor", help="self-check")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--mode", choices=["auto", "plugin", "template"], default="auto")
+    p.add_argument("--plugin-dir", default="", help="plugin root for plugin-mode checks")
+    p.add_argument("--strict", action="store_true", help="count app-wiring as critical")
 
     p = sub.add_parser("lint", help="lint SQL files")
-    p.add_argument("files", nargs="+")
+    p.add_argument("files", nargs="*")
     p.add_argument("--dialect", default="")
     p.add_argument("--json", action="store_true")
     p.add_argument("--strict", action="store_true", help="exit non-zero on warnings too")
+    p.add_argument("--changed", action="store_true",
+                   help="lint *.sql changed vs the git default branch (or last commit)")
 
     p = sub.add_parser("contract", help="contract operations")
     csub = p.add_subparsers(dest="contract_cmd", required=True)
     c = csub.add_parser("validate"); c.add_argument("file")
     c = csub.add_parser("compile"); c.add_argument("file"); c.add_argument("--out", default="")
-    c = csub.add_parser("diff"); c.add_argument("file"); c.add_argument("--baseline", required=True)
-    c = csub.add_parser("decide"); c.add_argument("file"); c.add_argument("--baseline", required=True)
+    c = csub.add_parser("diff"); c.add_argument("file")
+    c.add_argument("--baseline", required=True,
+                   help="contract file, or git:<rev>:<path> for a git baseline")
+    c = csub.add_parser("decide"); c.add_argument("file")
+    c.add_argument("--baseline", required=True)
     c.add_argument("--approver", required=True); c.add_argument("--reason", required=True)
 
     p = sub.add_parser("plan", help="DDL migration / backfill rehearsal")
@@ -72,9 +82,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("reconcile", help="key-level reconciliation")
     p.add_argument("--spec", required=True, help="JSON spec file")
     p.add_argument("--save-evidence", action="store_true")
+    p.add_argument("--contract", default="", help="bind contract digest into evidence")
+    p.add_argument("--sql", action="append", default=[],
+                   help="bind sql file digest into evidence (repeatable)")
 
     p = sub.add_parser("check", help="acceptance report")
-    p.add_argument("--table", required=True)
+    p.add_argument("--table", default="",
+                   help="target table; with --changed, inferred from the changeset")
     p.add_argument("--env", default="dev")
     p.add_argument("--partition", default="")
     p.add_argument("--sql", action="append", default=[])
@@ -82,6 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ddl", default="")
     p.add_argument("--dqc", default="")
     p.add_argument("--baseline", default="")
+    p.add_argument("--reconcile-spec", default="", help="spec file bound to the evidence")
+    p.add_argument("--changed", action="store_true",
+                   help="batch mode: take changed files from git (diff vs default branch)")
     p.add_argument("--mode", choices=["strict", "local"], default="strict")
     p.add_argument("--out-json", default="")
     p.add_argument("--out-md", default="")
@@ -99,20 +116,84 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _changed_files(root: Path, suffixes) -> List[Path]:
+    """Changed files vs the default branch (fallback: last commit)."""
+    import subprocess
+
+    def git(*argv):
+        return subprocess.run(["git", *argv], cwd=str(root), capture_output=True,
+                              text=True, timeout=30, check=True).stdout
+
+    names: List[str] = []
+    for base in ("origin/main", "main", "HEAD~1"):
+        try:
+            names = git("diff", "--name-only", base).split()
+            names += git("diff", "--name-only").split()  # unstaged on top
+            break
+        except Exception:
+            continue
+    return [root / n for n in dict.fromkeys(names)
+            if n and not n.startswith((".", "plugins/", "template/"))
+            and Path(n).suffix.lower() in suffixes and (root / n).is_file()]
+
+
+def _resolve_baseline(spec: str, root: Path) -> Path:
+    """File path, or git:<rev>:<path> resolved via `git show` (no shell)."""
+    import subprocess
+    import tempfile
+    if not spec.startswith("git:"):
+        return Path(spec)
+    _, rev, path = spec.split(":", 2)
+    out = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=str(root),
+                         capture_output=True, text=True, timeout=30, check=True).stdout
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    tmp.write(out)
+    tmp.close()
+    return Path(tmp.name)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     root = find_project_root()
     config = HarnessConfig.load(root=root)
 
+    if args.cmd == "init":
+        import json as _json
+        from .migrate import run_init
+        target = Path(args.target).resolve()
+        template_root = Path(args.scaffold).resolve() if args.scaffold else None
+        if template_root is None:
+            here = Path(__file__).resolve()
+            for candidate in (here.parents[2] / "template",          # repo checkout
+                              here.parents[1] / "template"):
+                if (candidate / ".claude").is_dir():
+                    template_root = candidate
+                    break
+        if template_root is None or not (template_root / ".claude").is_dir():
+            print("init: template/ not found (run from the repo, or pass --scaffold)")
+            return 2
+        report = run_init(target, template_root, args.python, args.dialect,
+                          dry_run=args.dry_run, mcp=args.mcp,
+                          statusline=args.statusline)
+        print(_json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+
     if args.cmd == "doctor":
         from .doctor import run_doctor
-        return run_doctor(root, json_out=args.json)
+        return run_doctor(root, json_out=args.json, mode=args.mode,
+                          plugin_dir=args.plugin_dir, strict=args.strict)
 
     if args.cmd == "lint":
         from .rules import lint_sql
+        files = list(args.files)
+        if args.changed:
+            files = [str(p) for p in _changed_files(root, {".sql"})] or files
+        if not files:
+            print("lint: no files (pass files or --changed)")
+            return 2
         results = []
         failed = False
-        for name in args.files:
+        for name in files:
             path = Path(name)
             dialect = config.resolve_dialect(name, args.dialect or None)
             result = lint_sql(path.read_text(encoding="utf-8-sig", errors="replace"), dialect, config)
@@ -144,14 +225,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.contract_cmd == "diff":
             current, _ = contracts.load_contract(path)
-            baseline, _ = contracts.load_contract(Path(args.baseline))
+            baseline, _ = contracts.load_contract(_resolve_baseline(args.baseline, root))
             changes = contracts.diff_contracts(current, baseline)
-            _print_json({"from": baseline["digest"], "to": current["digest"], "changes": changes})
+            _print_json({"from": baseline["digest"], "to": current["digest"],
+                         "baseline": args.baseline, "changes": changes})
             return 0
         if args.contract_cmd == "decide":
             from datetime import date
             current, _ = contracts.load_contract(path)
-            baseline, _ = contracts.load_contract(Path(args.baseline))
+            baseline, _ = contracts.load_contract(_resolve_baseline(args.baseline, root))
             contracts.record_decision(root, current["contract_id"], {
                 "date": date.today().isoformat(),
                 "approver": args.approver,
@@ -205,17 +287,33 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.cmd == "reconcile":
         from .reconcile import ReconcileSpec, reconcile
         from .evidence import build_evidence, save_evidence, text_digest
+        from .evidence import file_digest
         spec_raw = json.loads(Path(args.spec).read_text(encoding="utf-8-sig"))
-        spec = ReconcileSpec(**{k: spec_raw.get(k) for k in
-                                ("left", "right", "keys", "metrics", "sample_rows", "max_rows")})
+        spec_keys = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
+        spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
         result = reconcile(spec)
         payload = {"spec": spec.to_dict(), **result.to_dict()}
         if args.save_evidence and result.status != "unverified":
+            # canonical evidence roles, shared with `dw check` verification:
+            # contract / sql:<name> / ddl:<name> / reconcile:spec
+            inputs = {"reconcile:spec": text_digest(json.dumps(spec.to_dict(), sort_keys=True))}
+            binding_paths: Dict[str, str] = {}
+            bindings = dict(spec_raw.get("bindings") or {})
+            contract_path = args.contract or bindings.get("contract")
+            if contract_path and Path(contract_path).is_file():
+                inputs["contract"] = file_digest(Path(contract_path))
+                binding_paths["contract"] = str(Path(contract_path))
+            for sql_name in [*args.sql, *(bindings.get("sql") or [])]:
+                if Path(sql_name).is_file():
+                    inputs[f"sql:{Path(sql_name).name}"] = file_digest(Path(sql_name))
+                    binding_paths[f"sql:{Path(sql_name).name}"] = str(Path(sql_name))
             ev = build_evidence(
                 f"reconcile-{spec_raw.get('table', 'table')}",
-                {"spec": text_digest(json.dumps(spec.to_dict(), sort_keys=True))},
+                inputs,
                 {"status": result.status}, root,
-                environments={"left": spec.left, "right": spec.right})
+                environments={"left": spec.left, "right": spec.right},
+                producer="dw-reconcile",
+                binding_paths=binding_paths)
             save_evidence(ev, root, f"reconcile-{spec_raw.get('table', 'table')}")
             payload["evidence"] = "saved"
         _print_json(payload)
@@ -223,13 +321,41 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.cmd == "check":
         from .check import run_checks
+        sql_paths = [Path(p) for p in args.sql]
+        contract_path = Path(args.contract) if args.contract else None
+        ddl_path = Path(args.ddl) if args.ddl else None
+        dqc_path = Path(args.dqc) if args.dqc else None
+        table = args.table
+        if args.changed:
+            changed = _changed_files(root, {".sql", ".json"})
+            sql_paths.extend(p for p in changed if p.suffix == ".sql")
+            for p in changed:
+                if p.suffix != ".json":
+                    continue
+                name = p.name.lower()
+                if name.startswith("contract"):
+                    contract_path = contract_path or p
+                elif name.startswith("ddl_"):
+                    ddl_path = ddl_path or p
+                elif name.startswith("dqc_"):
+                    dqc_path = dqc_path or p
+            if not table and contract_path:
+                from .contracts import load_contract
+                table = load_contract(contract_path)[0].get("table", "")
+            if not table:
+                print("check --changed: could not infer table (pass --table)")
+                return 2
+        if not table:
+            print("check: --table required (or use --changed)")
+            return 2
         report = run_checks(
-            config, args.table, args.env, args.partition,
-            sql_files=[Path(p) for p in args.sql] or None,
-            contract_path=Path(args.contract) if args.contract else None,
-            ddl_path=Path(args.ddl) if args.ddl else None,
-            dqc_path=Path(args.dqc) if args.dqc else None,
+            config, table, args.env, args.partition,
+            sql_files=sql_paths or None,
+            contract_path=contract_path,
+            ddl_path=ddl_path,
+            dqc_path=dqc_path,
             baseline=Path(args.baseline) if args.baseline else None,
+            reconcile_spec=Path(args.reconcile_spec) if args.reconcile_spec else None,
             mode=args.mode)
         payload = report.to_dict()
         md = report.to_markdown()

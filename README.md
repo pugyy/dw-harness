@@ -36,7 +36,8 @@ python scripts/run_demo.py        # 无凭据、无数据库、无 Claude Code �
 ```
 
 装完在项目里跑 `/dw-harness:dw-bootstrap` 生成项目侧文件（AGENTS.md / rules /
-harness.json / contracts）。需要 Claude Code ≥ 2.1.271（userConfig options）。
+harness.json / contracts）。需要 Claude Code ≥ 2.1.295
+（userConfig options + hook `onFailure` fail-closed）。
 
 ### 2. 本地加载插件（开发/试用）
 
@@ -101,6 +102,7 @@ dw impact --table db.t [--dataworks]                # 仓库 SQL 血缘 + 可选
 dw reconcile --spec spec.json [--save-evidence]     # 键级对账（文件/MaxCompute/StarRocks）
 dw check --table t [--env dev] [--mode strict|local] # 四态验收报告（JSON + PR Markdown）
 dw next                                              # 从交付物推断八步进度
+dw lint --changed / dw check --changed                # git 变更集批量模式
 dw demo                                              # 离线端到端验收
 ```
 

@@ -97,8 +97,8 @@ class PluginWiringTests(unittest.TestCase):
 
     def test_selftest(self):
         for script in ("guard_shell.py", "guard_write.py", "validate_post.py",
-                       "session_context.py", "post_compact.py", "file_changed.py",
-                       "handoff.py"):
+                       "session_context.py", "post_compact.py", "handoff.py",
+                       "statusline.py"):
             proc = subprocess.run([sys.executable, str(PLUGIN_HOOKS / script), "--selftest"],
                                   capture_output=True, text=True, timeout=30)
             self.assertEqual(proc.returncode, 0, script)

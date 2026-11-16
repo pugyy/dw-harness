@@ -71,6 +71,12 @@ dw contract decide contracts/contract.json --baseline baselines/v1.json \
 当前表/版本/Step/约束。SessionStart 注入的会话状态卡、statusline、handoff、
 `dw next` 都读这里；`dw next` 另外用文件证据（交付物）推断进度，不信会话记忆。
 
+## 证据与信任边界
+
+- 证据带 `producer`（dw-reconcile / dw-check / ci / manual）与可选 HMAC 签名（`DW_HARNESS_EVIDENCE_KEY`，仅环境变量）
+- `dw check --mode strict` 拒绝 manual/hand_edited 证据：手写 PASS 只能展示，不能过门禁
+- 证据记录 canonical 输入角色与绑定路径：contract / sql:<name> / ddl:<name> / reconcile:spec；任一重算不一致即 UNVERIFIED
+
 ## 环境变量（凭据只走环境，源码零字面量）
 
 | 变量 | 用途 |
@@ -80,3 +86,4 @@ dw contract decide contracts/contract.json --baseline baselines/v1.json \
 | `DW_HARNESS_ODPS_ACCESS_ID/_ACCESS_KEY/_PROJECT/_ENDPOINT` | MaxCompute 只读对账身份 |
 | `DW_HARNESS_SR_HOST/_PORT/_USER/_PASSWORD/_DATABASE` | StarRocks 只读对账身份 |
 | `DW_HARNESS_DW_ENDPOINT/_TOKEN/_PROJECT` | DataWorks 血缘适配器（仅 https 公网） |
+| `DW_HARNESS_EVIDENCE_KEY` | 证据 HMAC 签名密钥（可选，仅环境变量） |

@@ -15,10 +15,13 @@ Codex / Cursor / ZCode 等可直接读取）。项目个性信息在 CLAUDE.md �
 
 ## 八步工作流（MaxCompute → StarRocks 主线）
 
+> 命令前缀：插件模式为 `/dw-harness:dw-*`（如 `/dw-harness:dw-etl`）；
+> 复制模板模式保留裸名 `/dw-etl`。下文以裸名书写。
+
 1. `/dw-requirement-analysis` 需求分析 → 需求摘要 + 字段口径草稿 + 待确认清单
 2. `/dw-technical-design` 技术设计 → OneData 建模 + 契约 contract.yaml 定稿
 3. `/dw-etl` ETL 开发 → `ddl_[表].sql` + `insert_[表].sql`（+ `ddl_sr_[表].sql`）
-4. `/dw-self-test` 自测 → 23 项检查报告（fork 隔离运行）
+4. `/dw-self-test` 自测 → 23 项检查报告（fork + 专用 agent 隔离运行）
 5. `/dw-data-comparison` 数据比对 → `dw reconcile` 键级对账证据
 6. `/dw-sr` SR 导入 → SR DDL + 风险分析
 7. `/dw-performance-optimization` 性能优化 → 计划/静态判断说明

@@ -2,7 +2,7 @@
 name: dw-bootstrap
 description: 初始化/迁移 dw-harness 到当前项目（写 AGENTS.md、rules、harness.json，合并 settings.json）。仅在用户明确要求安装或升级 harness 时使用。
 disable-model-invocation: true
-allowed-tools: Read, Write, Edit, Glob, Bash(dw init:*, dw doctor:*)
+allowed-tools: Read, Write, Edit, Glob, Bash(dw init:*), Bash(dw doctor:*)
 ---
 
 # dw-bootstrap：安装 / 迁移
