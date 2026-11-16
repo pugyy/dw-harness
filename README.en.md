@@ -16,6 +16,8 @@ dw-harness is a Claude Code plugin and CLI for data warehouse teams. It packages
 
 It is built for warehouse and data-platform teams already using Claude Code, especially those running ETL on MaxCompute, StarRocks, Hive or Spark and wanting AI output to pass review and CI. It does not replace a scheduler, metadata platform or BI tool, and it is not a SQL formatter.
 
+> **Status**: v2.0.0 is released; 123 tests and the 6/6 CI matrix pass. The live MaxCompute/StarRocks/DataWorks adapters have not been tested against production, and `plugin-validate` needs a secret and a manual dispatch. Unverified items and reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
+
 ## Contents
 
 - [Release history](#release-history)
@@ -23,11 +25,14 @@ It is built for warehouse and data-platform teams already using Claude Code, esp
 - [Why dw-harness](#why-dw-harness)
 - [Features](#features)
 - [30-second demo](#30-second-demo)
+- [Requirements](#requirements)
 - [Install](#install)
+- [Security and data boundaries](#security-and-data-boundaries)
 - [Architecture](#architecture)
 - [Six layers](#six-layers)
 - [CLI](#cli)
 - [Support](#support)
+- [FAQ](#faq)
 - [Documentation](#documentation)
 - [Keywords](#keywords)
 - [Contributing](#contributing)
@@ -44,8 +49,8 @@ It is built for warehouse and data-platform teams already using Claude Code, esp
 
 The first public version, delivered as a copyable `.claude` template for data warehouse teams:
 
-- Five layers: `CLAUDE.md`, Auto Memory, Hooks, Subagents, Skills
-- Three hooks: `validate_sql.py` (post-write SQL checks), `block_dangerous_ddl.py` (Bash DDL guard), `inject_context.py` (re-inject conventions after compaction)
+- Five layers in concept: `CLAUDE.md`, Auto Memory (provided by Claude Code), Hooks, Subagents, Skills
+- Three hooks: `validate_sql.py` (post-write SQL checks), `block_dangerous_ddl.py` (Bash DDL guard), `inject_context.py` (intended to re-inject conventions after compaction; v1 used the wrong event name and did not take effect, fixed in v2)
 - Eight skills: requirement analysis, technical design, ETL development, self-test, data comparison, SR import, performance tuning, DQC
 - Four subagents: `dw-explorer`, `sql-validator`, `data-quality-checker`, `data-comparator`
 - ODPS/MaxCompute, Hive and Spark support; 23 self-test items and nine DQC categories
@@ -100,14 +105,20 @@ Do this in order:
 2. Back up: cp -r .claude .claude.v1.bak (PowerShell: Copy-Item -Recurse .claude .claude.v1.bak). Confirm git status.
 3. Choose an install path:
    A. Claude Code: run /plugin marketplace add pugyy/dw-harness, /plugin install dw-harness@dw-harness, then /dw-harness:dw-bootstrap.
-   B. No Claude Code or offline: pip install "dw-harness[yaml,deep]"; run dw init --target . --python python --dry-run, review it, then run dw init --target . --python python.
+   B. No Claude Code or offline:
+      python -m pip install "dw-harness[yaml,deep] @ git+https://github.com/pugyy/dw-harness.git"
+      (offline: git clone https://github.com/pugyy/dw-harness.git /tmp/dw-harness && (cd /tmp/dw-harness && python -m pip install -e ".[yaml,deep]"))
+      Then run dw init --target . --python python --dry-run, review it, then run dw init --target . --python python.
 4. Do not overwrite existing settings.json, skills, rules, agents or statusLine. On conflict, stop and list the files, the reason and a recommendation. Do not delete anything.
-5. Inspect the result: AGENTS.md, root CLAUDE.md, .claude/rules/, .claude/dw/harness.json, contracts/contract.example.json. Set dialect to odps or starrocks. Put read-only production tables into protected_objects.
+5. Inspect the result: AGENTS.md, root CLAUDE.md, .claude/rules/, .claude/dw/harness.json, contracts/contract.example.json. Set dialect to odps/hive/spark/starrocks. Put read-only production tables into protected_objects.
 6. Validate and record exit codes:
    - dw doctor --mode plugin or --mode template
    - dw lint on a sample containing SELECT t.* (must fail)
    - dw lint on a sample containing COUNT(*) (must pass)
-   - dw check --table <table> --env dev --partition <yyyyMMdd>
+   - dw check --table <table> --env dev --partition <yyyyMMdd> \
+       --contract contracts/<table>.json --sql insert_<table>.sql \
+       --ddl ddl_<table>.sql --reconcile-spec reconcile_<table>.json
+     Strict mode needs DW_HARNESS_EVIDENCE_KEY; add --mode local when no key is configured.
 7. Report: changed files, commands run, validation results, unverified items and rollback commands.
 
 Constraints:
@@ -130,6 +141,8 @@ The Chinese version of the same prompt is in [README.md](README.md#让-ai-agent-
 | Upgrading the template overwrites team customisations | Merge-style `init`: backups, `managed.json`, conflict reports; user files are not deleted |
 | Lineage, self-test and comparison output drown the main conversation | Four subagents plus `context: fork`; the main thread gets summaries |
 
+**Relationship to existing tools**: dw-harness does not replace dbt tests, Great Expectations or sqlfluff. It connects those checks to Claude Code hooks, table contracts and an acceptance report; scheduling, metadata and BI stay with existing platforms.
+
 ## Features
 
 | Capability | Entry point | Notes |
@@ -141,7 +154,7 @@ The Chinese version of the same prompt is in [README.md](README.md#让-ai-agent-
 | Acceptance and evidence | `dw check` | Four-state report, exit codes 0/1/2, JSON and PR Markdown, input-bound evidence |
 | Planning and generation | `dw plan`, `dw dqc`, `dw impact` | DDL migration/backfill rehearsal, stable DQC IDs, repository SQL lineage |
 | Session workflow | Hooks, skills, agents, MCP | State card, handoff, statusLine, 15 skills, four subagents, opt-in local MCP |
-| Distribution and CI | Plugin, CLI, template | Marketplace install, `pip install`, `build --check`, three-platform matrix with wheel install |
+| Distribution and CI | Plugin, CLI, template | Marketplace install, source install, `build --check`, three-platform matrix with wheel install |
 
 ## 30-second demo (orders table, offline)
 
@@ -159,7 +172,20 @@ The demo runs 20 acceptance cases, including counter-examples:
 - Production overwrite, DELETE without WHERE, an indirect DROP through `-f`, an expired exception and a benign command each get the intended policy decision
 - Re-running migration on a v1 project keeps custom skills, rules and status line, without duplicating hooks
 
+## Requirements
+
+| Item | Requirement |
+|---|---|
+| Python | 3.9–3.13 (CI covers 3.9 and 3.13) |
+| Claude Code | ≥ 2.1.295 for plugin mode; not required for CLI mode |
+| OS | macOS / Linux / Windows (PowerShell covered) |
+| Git | Needed for clone, migration, `--changed` and Git baselines |
+| Database clients | Optional: odpscmd, beeline/hive, spark-sql, mysql/StarRocks; the file adapter works without one |
+| Optional extras | `yaml`, `deep`, `odps`, `sr` |
+
 ## Install
+
+The package is not on PyPI. Install the CLI from source.
 
 ### 1. Claude Code plugin (recommended)
 
@@ -168,7 +194,7 @@ The demo runs 20 acceptance cases, including counter-examples:
 /plugin install dw-harness@dw-harness
 ```
 
-Then run `/dw-harness:dw-bootstrap` in the project to generate the project-side files (`AGENTS.md`, rules, `harness.json`, contracts). Requires Claude Code 2.1.295 or later: a hook that fails to start blocks the tool call. The plugin uses `python` 3.9+ from PATH; the copy template can pass `dw init --python`.
+Then run `/dw-harness:dw-bootstrap` in the project to generate the project-side files (`AGENTS.md`, rules, `harness.json`, contracts). Requires Claude Code 2.1.295 or later: a hook that fails to start blocks the tool call. The plugin uses `python` 3.9+ from PATH; if the machine only has `python3`, create an alias or use template mode.
 
 ### 2. Load the plugin locally
 
@@ -179,26 +205,43 @@ claude --plugin-dir ./dw-harness/plugins/dw-harness
 
 The `plugin-validate` workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` secret; without it the job fails instead of silently skipping. A self-hosted runner with the CLI already installed also works.
 
-### 3. CLI only (CI, no Claude Code)
+### 3. CLI (CI or no Claude Code)
 
 ```bash
-pip install -e ".[test]"          # or pip install dw-harness
+# Install directly from Git (PyPI is not published yet)
+pip install "dw-harness[test] @ git+https://github.com/pugyy/dw-harness.git"
+
+# Or clone and install editable
+git clone https://github.com/pugyy/dw-harness.git
+cd dw-harness
+pip install -e ".[test]"
+
+# Verify
 python -m unittest discover -s tests -t .
-python scripts/build.py --check   # generated-artifact drift gate
-python scripts/run_demo.py        # offline end-to-end acceptance
+python scripts/build.py --check
+python scripts/run_demo.py
 ```
 
-The copy-template mode remains available: `bash init.sh /your/project`. It is merge-style and no longer deletes `.claude`. See the [Chinese](docs/upgrade-from-v1.md) or [English](docs/upgrade-from-v1.en.md) migration guide.
+The copy-template mode remains available: `bash init.sh /your/project` (merge-style, no longer deletes `.claude`). On Windows, `.\init.ps1` also works. See the [Chinese](docs/upgrade-from-v1.md) or [English](docs/upgrade-from-v1.en.md) migration guide.
+
+## Security and data boundaries
+
+- Hooks run local Python scripts with your user privileges; review `.claude/hooks/` or the plugin `hooks/` before installing.
+- Database adapters use read-only credentials from `DW_HARNESS_*` environment variables; they do not write, and queries have timeouts and row limits.
+- `dw reconcile` reads CSV files or database results; evidence stores digests, paths and result state, not data rows.
+- `DW_HARNESS_EVIDENCE_KEY` belongs in environment variables or a CI secret, never in the repository.
+- The local stdio MCP server is off by default and requires `dw init --mcp`.
+- `dw init` does not delete `.claude`; it writes `.bak-<timestamp>` and `managed.json`.
 
 ## Architecture
 
 ```text
 src/                          # single source (edit here)
 ├── dw_core/                  # core used by CLI, hooks, CI and MCP; standard library only
+│   └── data/dialects/        # odps / hive / spark / starrocks packs (shipped with the package)
 ├── hooks/                    # 7 Claude Code hook adapters (thin, fail-closed)
 ├── skills/                   # 15 skills (eight steps + bootstrap/contract/check/next/review/backfill/sql-reference)
 ├── agents/                   # 4 subagents (flat, model: inherit, no permissionMode dependency)
-├── dialects/                 # odps / hive / spark / starrocks packs
 └── scaffold/                 # files written by dw init (AGENTS.md/rules/harness.json)
 scripts/build.py              # deterministic build -> plugins/dw-harness + template/ + marketplace.json
 mcp/server.py                 # local stdio MCP (off by default; dw init --mcp)
@@ -216,7 +259,7 @@ tests/                        # 123 tests: rules, guards, contracts, reconciliat
 | 1 AGENTS.md + rules/ | Shared conventions, path-scoped and loaded on demand | — |
 | 2 Table contract | Single source for grain, currency, unit and thresholds | Breaking change without a migration decision → acceptance FAIL |
 | 3 PreToolUse guard | Dangerous DDL, partition safety, PII, Bash and PowerShell | fail-closed (`onFailure: block` plus in-script deny) |
-| 4 PostToolUse feedback | SQL checks after a write (ERROR exit 2 feeds the model) | non-blocking; `doctor` reports |
+| 4 PostToolUse feedback | SQL checks after a write (ERROR exit 2 feeds the model) | non-blocking; `doctor` checks the script is runnable |
 | 5 Deterministic commands | `dw lint` / `reconcile` / `check`; the model explains but does not approve | exit codes 0/1/2 |
 | 6 Evidence | Input digests plus producer/HMAC trust boundary; any change → UNVERIFIED | strict CI exits 2 |
 
@@ -246,6 +289,29 @@ dw demo                                             # offline end-to-end demo
 See [docs/support-matrix.md](docs/support-matrix.md). SQL lint covers odps/hive/spark/starrocks; StarRocks `INSERT` without a partition is engine-legal and downgraded to a warning by policy. Core and hooks use only the standard library (Python 3.9+); YAML contracts, sqlglot deep parsing and database adapters are optional capabilities.
 
 The live MaxCompute, StarRocks and DataWorks adapters have not been tested against production instances. `plugin-validate` needs a secret and a manual dispatch. Both are marked unverified in the release notes; reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
+
+## FAQ
+
+**Only `python3`, no `python`?**
+Plugin hooks use `python` from PATH. Create an alias (for example `ln -s $(which python3) ~/.local/bin/python`) or use template mode with `dw init --python python3`. Do not rely on the system `python` on macOS.
+
+**Plugin mode or template mode?**
+Use the plugin for automatic updates and less per-project maintenance; use the template for offline/restricted networks or when hooks must live in the project `settings.json`. Do not install both: their hook paths differ, and migration de-duplication will not merge the two wirings.
+
+**Can I use it without Claude Code?**
+Yes. `dw`, `dw lint`, `dw contract`, `dw reconcile` and `dw check` do not require Claude Code. `dw demo` does not require a database.
+
+**Why is `dw check` always UNVERIFIED?**
+Check the `reconcile` item first: strict mode needs `DW_HARNESS_EVIDENCE_KEY`; use `--mode local` without a key. Then confirm `--contract`, `--sql`, `--ddl` and `--reconcile-spec` are present. If a partition or file changed, the old evidence is stale; rerun `dw reconcile --save-evidence`.
+
+**How do I generate an evidence key?**
+```bash
+dw evidence keygen
+```
+Export the same `DW_HARNESS_EVIDENCE_KEY` on the producing and checking sides; use a CI secret and never commit it.
+
+**How do I roll back?**
+Migration preserves `.claude`; `settings.json` and `CLAUDE.md` get `.bak-<timestamp>`. Run `git checkout -- .claude CLAUDE.md`, then preview untracked files with `git clean -nd .claude AGENTS.md` before cleaning. Uninstall the plugin with `/plugin uninstall dw-harness@dw-harness`. See the [migration guide](docs/upgrade-from-v1.en.md).
 
 ## Documentation
 

@@ -14,8 +14,10 @@ SR DDL → 契约 → DDL/回填预演 → DQC → 键级对账 → 影响面 �
 
 ### 1. MaxCompute 只读对账
 
+在仓库根目录执行（PyPI 尚未发布；不要使用 `pip install dw-harness`）：
+
 ```bash
-pip install dw-harness[odps]
+pip install -e ".[odps]"
 export DW_HARNESS_ODPS_ACCESS_ID=...        # 只读身份
 export DW_HARNESS_ODPS_ACCESS_KEY=...
 export DW_HARNESS_ODPS_PROJECT=...
@@ -46,8 +48,10 @@ dw check --table db_a.dws_trade_order_di --env offline --partition 20261115 \
 
 ### 2. StarRocks 只读对账
 
+在仓库根目录执行：
+
 ```bash
-pip install dw-harness[sr]
+pip install -e ".[sr]"
 export DW_HARNESS_SR_HOST=... DW_HARNESS_SR_PORT=9030
 export DW_HARNESS_SR_USER=readonly DW_HARNESS_SR_PASSWORD=... DW_HARNESS_SR_DATABASE=db_a
 # spec 里 "adapter": "starrocks"，其余同上

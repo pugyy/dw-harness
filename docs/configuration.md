@@ -57,7 +57,7 @@ schema 见 `contracts/schema/contract.schema.json`。要点：
 - 金额列必须同时声明 `currency` 与 `unit`：`CNY` + `fen` / `yuan` / `qian_yuan`
   是三种**不同的契约事实**，对账换算由此驱动（1 yuan = 100 fen 基准）
 - `quality` 阈值（波动/金额容差/新鲜度）与 `sla` 是 DQC 生成和对账判定的唯一来源
-- YAML 格式需可选能力：`pip install dw-harness[yaml]`；JSON 永远可用
+- YAML 格式需可选能力：在仓库根目录执行 `pip install -e ".[yaml]"`（PyPI 尚未发布）；JSON 永远可用
 
 破坏性变更（删列/类型收窄/单位或币种/键/粒度/分区）必须记录迁移决定：
 

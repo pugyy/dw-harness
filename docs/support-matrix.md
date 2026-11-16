@@ -7,7 +7,7 @@
 | Python | 3.9 – 3.13 | CI 矩阵跑 3.9（下限）与 3.13（较新受支持版） |
 | 平台 | Linux / Windows / macOS | hook 同时匹配 Bash 与 PowerShell（Windows 无 Git Bash 时） |
 | 核心依赖 | 无（纯标准库） | CLI、hooks、规则引擎、文件对账、验收全链路 |
-| 可选能力 | `pip install dw-harness[yaml\|deep\|odps\|sr]` | YAML 契约 / sqlglot 深检 / MaxCompute / StarRocks |
+| 可选能力 | 仓库根目录 `pip install -e ".[yaml,deep,odps,sr]"`（PyPI 尚未发布） | YAML 契约 / sqlglot 深检 / MaxCompute / StarRocks |
 
 ## SQL 方言 × 规则
 
