@@ -1,0 +1,11 @@
+[
+  {
+    "id": "exc-2020-scratch",
+    "approver": "trade-lead",
+    "reason": "temporary scratch cleanup (expired fixture)",
+    "environment": "dev",
+    "objects": ["db_a.tmp_scratch"],
+    "operations": ["destructive"],
+    "not_after": "2020-01-01"
+  }
+]
