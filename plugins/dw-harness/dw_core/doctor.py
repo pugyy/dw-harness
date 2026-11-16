@@ -73,6 +73,15 @@ def run_doctor(root: Path, python: str = sys.executable, hooks_dir: Optional[Pat
 
     add("core-import", True, f"dw_core {__version__} from {Path(__file__).parent}", critical=False)
 
+    # dialect packs actually loadable (wheel-safe package data)
+    try:
+        from .config import HarnessConfig as _HC
+        pack = _HC(data={}, root=root, path=None).dialect_pack("starrocks")
+        add("dialect-packs", bool(pack.get("rule_levels")),
+            f"starrocks pack: {pack.get('rule_levels')} from bundled package data")
+    except Exception as exc:  # noqa: BLE001
+        add("dialect-packs", False, f"pack load failed: {exc}")
+
     runnable = True
     detail_parts: List[str] = []
     for name in SCRIPT_NAMES:

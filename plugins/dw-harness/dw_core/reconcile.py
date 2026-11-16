@@ -284,10 +284,29 @@ def reconcile(spec: ReconcileSpec) -> ReconcileResult:
     except KeyError as exc:
         result.reasons.append(f"unknown adapter: {exc}")
         return result
-    if not left_ad.partition_exists():
+
+    def _partition_present(adapter, side: str) -> Optional[bool]:
+        """None = existence undeterminable (missing credentials, metadata
+        query failure...): a distinguishable UNVERIFIED, never a traceback."""
+        try:
+            return adapter.partition_exists()
+        except ReconcileError as exc:
+            result.reasons.append(f"{side} partition check failed: {exc}")
+        except Exception as exc:  # driver errors (timeout, auth, schema)
+            result.reasons.append(f"{side} partition check failed: "
+                                  f"{type(exc).__name__}: {exc}")
+        return None
+
+    left_present = _partition_present(left_ad, "left")
+    if left_present is None:
+        return result
+    right_present = _partition_present(right_ad, "right")
+    if right_present is None:
+        return result
+    if not left_present:
         result.reasons.append(f"left partition missing/unreadable: {spec.left.get('path', spec.left.get('table'))}")
         return result
-    if not right_ad.partition_exists():
+    if not right_present:
         result.reasons.append(f"right partition missing/unreadable: {spec.right.get('path', spec.right.get('table'))}")
         return result
     try:

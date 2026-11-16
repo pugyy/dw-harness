@@ -28,8 +28,13 @@ cat > recon.json <<'EOF'
  "metrics": [{"column": "net_amount", "abs_tol": "0", "rel_tol": "0",
               "unit_left": "fen", "unit_right": "fen"}]}
 EOF
-dw reconcile --spec recon.json --save-evidence \n  --contract contracts/contract.json \n  --sql insert_[表].sql --ddl ddl_[表].sql
-dw check --table db_a.dws_trade_order_di --reconcile-spec recon.json ...
+dw reconcile --spec recon.json --save-evidence \
+  --contract contracts/contract.json \
+  --sql insert_[表].sql --ddl ddl_[表].sql
+dw check --table db_a.dws_trade_order_di \
+  --sql insert_[表].sql --contract contracts/contract.json \
+  --ddl ddl_[表].sql --reconcile-spec recon.json \
+  --out-md .claude/dw/check_report.md
 ```
 
 > strict 模式的证据信任边界（防伪造）：生产与校验需持有同一个

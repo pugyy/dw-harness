@@ -87,9 +87,9 @@ class HarnessConfig:
         self.data = data
         self.root = root
         self.path = path
-        # dialect packs live next to dw_core/ in every layout (src/, plugin,
-        # template) — the pack file is a real config source, not a dead asset
-        self.dialect_dir = dialect_dir or Path(__file__).resolve().parents[1] / "dialects"
+        # dialect packs ship INSIDE the dw_core package (wheel-safe); an
+        # explicit dialect_dir wins (tests / custom packs)
+        self.dialect_dir = dialect_dir or _bundled_dialect_dir()
         self._dialect_packs: Dict[str, Dict[str, Any]] = {}
 
     # -- loading ---------------------------------------------------------
@@ -183,3 +183,13 @@ class HarnessConfig:
 
 class ConfigError(Exception):
     pass
+
+
+def _bundled_dialect_dir() -> Path:
+    """dw_core/data/dialects via importlib.resources (works in editable,
+    wheel and plugin/template copies alike)."""
+    try:
+        import importlib.resources as _res
+        return Path(str(_res.files("dw_core") / "data" / "dialects"))
+    except Exception:  # pragma: no cover - very old importlib
+        return Path(__file__).resolve().parent / "data" / "dialects"

@@ -115,6 +115,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("mcp", help="MCP server helpers")
     p.add_argument("--selftest", action="store_true")
 
+    p = sub.add_parser("evidence", help="evidence trust helpers")
+    esub = p.add_subparsers(dest="evidence_cmd", required=True)
+    esub.add_parser("keygen", help="print a fresh DW_HARNESS_EVIDENCE_KEY value")
+
     return parser
 
 
@@ -398,6 +402,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         ok = mcp_selftest()
         print("mcp selftest:", "ok" if ok else "failed")
         return 0 if ok else 1
+
+    if args.cmd == "evidence" and args.evidence_cmd == "keygen":
+        import secrets
+        key = secrets.token_hex(32)
+        print(key)
+        print("# export it in BOTH the producing and the checking shell:", file=sys.stderr)
+        print(f'#   export DW_HARNESS_EVIDENCE_KEY="{key}"', file=sys.stderr)
+        print("# (CI: store as a secret; never commit the value)", file=sys.stderr)
+        return 0
 
     return 2
 

@@ -43,7 +43,7 @@
 | 适配器 | 状态 | 凭据 |
 |---|---|---|
 | 文件（CSV fixtures，离线演示全链路） | ✅ 已测试 | — |
-| MaxCompute（pyodps，参数绑定） | 代码就绪，未连真实实例 | 环境变量，只读身份 |
+| MaxCompute（pyodps） | 存在性走表 API；fetch 的 `execute_sql(params=)` 占位符语义**真机待验**，未连真实实例 | 环境变量，只读身份 |
 | StarRocks（pymysql，参数绑定 + 标识符白名单） | 代码就绪，未连真实实例；分区存在性走 information_schema/SHOW PARTITIONS | 环境变量，只读身份 |
 | MaxCompute 分区元数据（PyODPS 表 API） | 代码就绪，真机待验 | 同上 |
 | DataWorks 血缘 | 可选，仅 https 公网（拒绝环回/内网/保留地址） | 环境变量 |

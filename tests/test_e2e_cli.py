@@ -210,6 +210,90 @@ class TruncationTests(unittest.TestCase):
         self.assertTrue(any("truncated" in r for r in result.reasons))
 
 
+class DbCredentialTests(unittest.TestCase):
+    def test_maxcompute_missing_credentials_is_unverified_not_traceback(self):
+        """rc.3 audit: partition_exists failures must surface as UNVERIFIED
+        with a reason, never as an exception out of reconcile()."""
+        import os
+        from dw_core.reconcile import ReconcileSpec, reconcile
+        saved = {k: os.environ.pop(k, None) for k in list(os.environ)
+                 if k.startswith("DW_HARNESS_ODPS_")}
+        try:
+            spec = ReconcileSpec(
+                left={"adapter": "maxcompute", "table": "db.t",
+                      "partition": "20261115"},
+                right={"adapter": "file",
+                       "path": str(REPO / "examples" / "demo" / "csv" / "old.csv"),
+                       "partition": "20261115"},
+                keys=["order_no"],
+                metrics=[{"column": "net_amount", "abs_tol": "0", "rel_tol": "0",
+                          "unit_left": "fen", "unit_right": "fen"}])
+            result = reconcile(spec)  # must not raise
+            self.assertEqual(result.status, "unverified")
+            self.assertTrue(any("credential" in r or "partition check failed" in r
+                                for r in result.reasons), result.reasons)
+        finally:
+            for k, v in saved.items():
+                if v is not None:
+                    os.environ[k] = v
+
+
+class StatuslineCommandTests(unittest.TestCase):
+    def _command(self, python: str) -> str:
+        import tempfile
+        from dw_core.migrate import run_init
+        template = REPO / "template"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".claude").mkdir(parents=True)
+            (root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+            run_init(root, template, python, "", statusline=True)
+            settings = json.loads((root / ".claude" / "settings.json")
+                                  .read_text(encoding="utf-8"))
+            status = settings["statusLine"]
+            self.assertNotIn("args", status)
+            self.assertEqual(status["type"], "command")
+            return status["command"]
+
+    def test_space_path_quoted(self):
+        command = self._command(r"C:\Program Files\Python39\python.exe")
+        self.assertIn('"C:\\Program Files\\Python39\\python.exe"', command)
+        self.assertTrue(command.rstrip().endswith('statusline.py"'), command)
+        self.assertNotIn("${CLAUDE_PROJECT_DIR}", command)  # absolute, not env-gamble
+
+    def test_cjk_path_quoted(self):
+        command = self._command(r"D:\工具\python.exe")
+        self.assertIn('"D:\\工具\\python.exe"', command)
+
+    def test_py_dash_three(self):
+        command = self._command("py -3")
+        self.assertIn('"py" -3 ', command)
+
+
+class DialectPackTests(unittest.TestCase):
+    def test_bundled_packs_load(self):
+        from dw_core.config import DEFAULT_CONFIG, HarnessConfig
+        config = HarnessConfig(data=dict(DEFAULT_CONFIG), root=Path("."), path=None)
+        pack = config.dialect_pack("starrocks")
+        self.assertEqual(pack.get("rule_levels", {}).get("insert-requires-partition"),
+                         "warn")
+        for dialect in ("odps", "hive", "spark", "starrocks"):
+            self.assertTrue(config.dialect_pack(dialect), dialect)
+
+    def test_custom_pack_overrides_rules(self):
+        import tempfile
+        from dw_core.config import DEFAULT_CONFIG, HarnessConfig
+        from dw_core.rules import lint_sql
+        with tempfile.TemporaryDirectory() as tmp:
+            pack_dir = Path(tmp)
+            (pack_dir / "hive.json").write_text(
+                json.dumps({"rule_levels": {"no-select-star": "off"}}), encoding="utf-8")
+            config = HarnessConfig(data=dict(DEFAULT_CONFIG), root=Path(tmp),
+                                   path=None, dialect_dir=pack_dir)
+            result = lint_sql("SELECT * FROM t", "hive", config)
+            self.assertNotIn("no-select-star", {i.rule for i in result.issues})
+
+
 class UnreadableScriptGuardTests(unittest.TestCase):
     def test_missing_f_script_not_allowed(self):
         import tempfile

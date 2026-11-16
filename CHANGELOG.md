@@ -37,6 +37,20 @@
 - R8 方言包真实加载：`dialects/*.json` 的 `rule_levels` 参与规则分级（不再是死资产）
 - R9 marketplace owner 断言入测试；`dw init --statusline` schema 测试
 
+### rc.3 复审修正（rev4）
+
+- e2e 文档 reconcile/check 命令修为真实续行（字面 `
+` 清除），check 命令写实无省略号
+- reconcile() 捕获 partition_exists 的凭据/驱动异常 → UNVERIFIED + 原因（不再 traceback）；
+  MaxCompute 缺凭据测试锁定
+- statusLine command：解释器路径整体加引号、脚本写绝对路径（不赌 statusLine 的
+  `${CLAUDE_PROJECT_DIR}` 注入）；Program Files / 中文路径 / py -3 三测
+- dialect packs 迁入 `dw_core/data/dialects/`（wheel 安装态随包分发，importlib.resources
+  读取）；pyproject package-data 同步；自定义 pack 覆盖测试 + doctor `dialect-packs` 检查
+- `_split_python` 修正带空格解释器路径的切分（无 flag 时不拆）
+- 新增 `dw evidence keygen`；README 补 strict/key 首用提示；
+  support-matrix 明确 MaxCompute fetch 参数绑定待验
+
 单源重构 + 插件分发 + 表契约 + 键级对账 + 四态验收。v1 用户的八步流程、
 OneData 背景、MaxCompute → StarRocks 主线全部保留；升级路径见
 docs/upgrade-from-v1.md。

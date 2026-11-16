@@ -89,7 +89,10 @@ tests/                        # 105 个测试：规则/守卫/契约/对账/证�
 | 3 PreToolUse 守卫 | Bash+PowerShell 危险 DDL / 分区安全阀 / PII | fail-closed（`onFailure: block` + 脚本内兜底 deny） |
 | 4 PostToolUse 反馈 | SQL 写后检查（ERROR exit 2 回喂修正） | 非阻塞 + doctor 报警 |
 | 5 确定性命令 | dw lint / reconcile / check（模型只解释不放行） | 退出码 0/1/2 |
-| 6 证据链 | 输入摘要绑定，变化即 UNVERIFIED | 严格 CI 退出码 2 |
+| 6 证据链 | 输入摘要绑定 + producer/HMAC 信任边界，变化即 UNVERIFIED | 严格 CI 退出码 2 |
+
+> strict 模式的证据门禁需要 `DW_HARNESS_EVIDENCE_KEY`（`dw evidence keygen` 生成，
+> 生产与校验同 key；不配 key 时 strict 会把证据判 untrusted，临时用 `--mode local`）。
 
 ## CLI 速查
 
@@ -103,6 +106,7 @@ dw plan backfill --table t --start 20260101 --end 20261115 [--env prod]
 dw dqc gen --contract c.json | dw dqc check ...     # 稳定 ID 规则生成/防漂移
 dw impact --table db.t [--dataworks]                # 仓库 SQL 血缘 + 可选 DataWorks
 dw reconcile --spec spec.json [--save-evidence]     # 键级对账（文件/MaxCompute/StarRocks）
+dw evidence keygen                             # 生成 DW_HARNESS_EVIDENCE_KEY（strict 信任边界）
 dw check --table t [--env dev] [--mode strict|local] # 四态验收报告（JSON + PR Markdown）
 dw next                                              # 从交付物推断八步进度
 dw lint --changed / dw check --changed                # git 变更集批量模式

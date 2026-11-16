@@ -43,15 +43,24 @@ V2_TEMPLATE_HOOKS = {
 
 def _split_python(python: str) -> Tuple[List[str], List[str]]:
     """'python' -> (['python'], []); 'py -3' -> (['py'], ['-3']);
-    'C:\\Py39\\python.exe' stays one executable. No JSON string surgery."""
-    try:
-        parts = shlex.split(python, posix=False)
-    except ValueError:
-        parts = python.split()
-    parts = [p.strip('"\'') for p in parts if p.strip()]
-    if not parts:
-        parts = ["python"]
-    return parts[:1], parts[1:]
+    'C:\\Program Files\\Py39\\python.exe' (spaces, no flags) stays ONE
+    executable. No JSON string surgery, no quote stripping of real paths."""
+    raw = python.strip()
+    for quote in ('"', "'"):
+        if len(raw) >= 2 and raw.startswith(quote) and raw.endswith(quote):
+            return [raw[1:-1]], []
+    if " " not in raw:
+        return [raw or "python"], []
+    if " -" in raw:  # flag-looking tokens: "py -3", "python -u x.py"
+        try:
+            parts = [p.strip('"\'') for p in shlex.split(raw, posix=False)
+                     if p.strip()]
+        except ValueError:
+            parts = raw.split()
+        if parts:
+            return parts[:1], parts[1:]
+    # spaces but no flags: treat the whole string as one (quoted) executable
+    return [raw], []
 
 
 def _v2_hook_block(block: Dict, python: str) -> Dict:
@@ -153,8 +162,11 @@ def merge_settings(target: Path, python: str, dry_run: bool,
     if statusline and "statusLine" not in settings:
         exe, extra = _split_python(python)
         # official statusLine schema: type/command/padding/refreshInterval;
-        # command is ONE shell string (no args field)
-        command = " ".join([*exe, '"${CLAUDE_PROJECT_DIR}/.claude/hooks/statusline.py"'])
+        # command is ONE shell string (no args field). Paths are ABSOLUTE and
+        # quoted: the statusLine contract does not promise ${CLAUDE_PROJECT_DIR}
+        # expansion or env injection, and interpreter paths may contain spaces.
+        script = target / ".claude" / "hooks" / "statusline.py"
+        command = " ".join([f'"{exe[0]}"', *extra, f'"{script}"'])
         settings["statusLine"] = {"type": "command", "command": command, "padding": 0}
         report.actions.append("settings.json: dw statusLine added (user statusLine absent)")
     if not dry_run:
@@ -251,7 +263,7 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
         (".claude/rules/sr.md", ".claude/rules/sr.md"),
     ]
     machinery: List[Tuple[str, str]] = []
-    for group in ("hooks", "dw_core", "skills", "agents", "dialects", "output-styles"):
+    for group in ("hooks", "dw_core", "skills", "agents", "output-styles"):
         base = template_root / ".claude" / group
         if base.is_dir():
             for item in sorted(base.rglob("*")):

@@ -148,10 +148,9 @@ def build(target_root: Path) -> List[str]:
                   for event, blocks in cfg["hooks"].items()}
     write_json(plugin / "hooks" / "hooks.json", {"hooks": hooks_json})
     copy_tree(SRC / "hooks", plugin / "hooks")
-    copy_tree(SRC / "dw_core", plugin / "dw_core")
+    copy_tree(SRC / "dw_core", plugin / "dw_core")  # includes data/dialects packs
     copy_tree(SRC / "skills", plugin / "skills")
     copy_tree(SRC / "agents", plugin / "agents")
-    copy_tree(SRC / "dialects", plugin / "dialects")
     copy_tree(SRC / "output-styles", plugin / "output-styles")
     copy_tree(REPO / "mcp", plugin / "mcp")
     (plugin / "README.md").write_text(PLUGIN_README, encoding="utf-8")
@@ -164,10 +163,9 @@ def build(target_root: Path) -> List[str]:
                           for event, blocks in cfg["hooks"].items()}}
     write_json(template / ".claude" / "settings.json", settings)
     copy_tree(SRC / "hooks", template / ".claude" / "hooks")
-    copy_tree(SRC / "dw_core", template / ".claude" / "dw_core")
+    copy_tree(SRC / "dw_core", template / ".claude" / "dw_core")  # includes data/dialects
     copy_tree(SRC / "skills", template / ".claude" / "skills")
     copy_tree(SRC / "agents", template / ".claude" / "agents")
-    copy_tree(SRC / "dialects", template / ".claude" / "dialects")
     copy_tree(SRC / "output-styles", template / ".claude" / "output-styles")
     scaffold = SRC / "scaffold"
     shutil.copyfile(scaffold / "CLAUDE.md", template / "CLAUDE.md")

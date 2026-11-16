@@ -35,4 +35,4 @@ dw = "dw_core.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-dw_core = ["py.typed"]
+dw_core = ["py.typed", "data/dialects/*.json"]
