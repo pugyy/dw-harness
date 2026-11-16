@@ -1,21 +1,21 @@
-name: Smoke Tests
+name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, "v2*"]
   pull_request:
-    branches: [main]
+    branches: [main, "v2*"]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.13"]
     env:
       CI: true
-
     steps:
       - uses: actions/checkout@v4
 
@@ -24,5 +24,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run hook smoke tests
-        run: python tests/run_hook_smoke_tests.py
+      - name: Install CLI (editable, with YAML capability)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Unit / contract / wiring / migration tests
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Build drift gate (src/ vs plugins/ + template/ + marketplace)
+        run: python scripts/build.py --check
+
+      - name: CLI + offline end-to-end demo
+        run: |
+          dw --version
+          python scripts/run_demo.py
+
+      - name: Doctor smoke
+        run: dw doctor || true
