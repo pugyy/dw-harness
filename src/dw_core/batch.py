@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from .contracts import ContractError, load_contract, read_baseline
+from .contracts import ContractError, load_contract, read_baseline, safe_git_ref
 from .ddl import parse_create_table
 from .guard import _target_table
 from .sqlsplit import scan_sql
@@ -19,8 +19,11 @@ def _is_contract(path: Path) -> bool:
 
 
 def _git_paths(root: Path, base: str):
-    cmd = ["git", "ls-tree", "-r", "--name-only", "-z", base]
-    output = subprocess.run(cmd, cwd=root, capture_output=True, check=True, timeout=30)
+    # literal argument list (no shell); the revision is validated first so a
+    # user-controlled value can never be parsed by git as an option
+    output = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", "-z", "--", safe_git_ref(base)],
+        cwd=root, capture_output=True, check=True, timeout=30)
     return set(output.stdout.decode("utf-8").split("\0"))
 
 

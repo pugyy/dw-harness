@@ -25,6 +25,22 @@ class ContractError(Exception):
     pass
 
 
+def safe_git_ref(ref: str) -> str:
+    """Validate a Git revision before it may appear as a subprocess argument.
+
+    List-form subprocess has no shell, but a user-controlled revision that
+    starts with '-' is parsed by git as an OPTION (e.g. --upload-pack=...),
+    an argument-injection vector. Git refs cannot contain whitespace or
+    control characters, so those are rejected as well.
+    """
+    text = str(ref)
+    if (not text or text.startswith("-") or text.startswith("/")
+            or any(ch.isspace() or ord(ch) < 32 for ch in text)
+            or any(ch in text for ch in ";|&$`<>(){}[]*?!\\'\"")):
+        raise ContractError("rejected git revision: %r" % (ref,))
+    return text
+
+
 def _load_any(path: Path) -> Dict[str, Any]:
     text = path.read_text(encoding="utf-8-sig")
     return _parse_contract(text, path)
@@ -54,11 +70,12 @@ def read_baseline(source, root: Path) -> Tuple[Dict[str, Any], str]:
     spec = str(source)
     if spec.startswith("git:"):
         _, revision, name = spec.split(":", 2)
-        if not revision or revision.startswith("-") or not name:
+        if not name:
             raise ContractError("invalid Git baseline; expected git:<revision>:<path>")
+        revision = safe_git_ref(revision)
         path = Path(name)
         blob = subprocess.run(
-            ["git", "show", f"{revision}:{name}"], cwd=root, capture_output=True,
+            ["git", "show", revision + ":" + name], cwd=root, capture_output=True,
             timeout=30, check=True).stdout
     else:
         path = root / Path(spec)

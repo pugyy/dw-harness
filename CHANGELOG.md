@@ -129,7 +129,7 @@ docs/upgrade-from-v1.md。
 - AGENTS.md 承载跨工具共享规范，CLAUDE.md 显式 `@AGENTS.md` 引用
 
 ### 测试 / CI / 文档
-- 120 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
+- 123 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
   manifest、构建漂移、迁移幂等、MCP 握手、离线端到端
 - CI：ubuntu/windows/macos × Python 3.9/3.13 + CLI 安装 + build --check + demo；
   插件真机验证独立 workflow（需受信环境，缺 claude CLI 时优雅跳过）

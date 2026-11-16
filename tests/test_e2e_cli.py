@@ -307,6 +307,35 @@ class StatuslineCommandTests(unittest.TestCase):
         self.assertIn('"py" -3 ', command)
 
 
+class GitRefInjectionTests(unittest.TestCase):
+    """User-controlled revisions must never reach git as options."""
+
+    def test_option_like_refs_rejected(self):
+        from dw_core.contracts import ContractError, safe_git_ref
+        for bad in ("--upload-pack=evil", "-oProxyCommand=x", "", "a b",
+                    "HEAD;rm", "refs/heads/x y", "/etc/passwd"):
+            with self.subTest(ref=bad):
+                with self.assertRaises(ContractError):
+                    safe_git_ref(bad)
+        self.assertEqual(safe_git_ref("HEAD~1"), "HEAD~1")
+        self.assertEqual(safe_git_ref("origin/main"), "origin/main")
+
+    def test_batch_ls_tree_rejects_option_ref(self):
+        import tempfile
+        from dw_core.batch import _git_paths
+        from dw_core.contracts import ContractError
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ContractError):
+                _git_paths(Path(tmp), "--upload-pack=evil")
+
+    def test_read_baseline_rejects_option_revision(self):
+        import tempfile
+        from dw_core.contracts import ContractError, read_baseline
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ContractError):
+                read_baseline("git:--upload-pack=evil:contract.json", Path(tmp))
+
+
 class DialectPackTests(unittest.TestCase):
     def test_bundled_packs_load(self):
         from dw_core.config import DEFAULT_CONFIG, HarnessConfig

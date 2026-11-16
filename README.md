@@ -77,7 +77,7 @@ plugins/dw-harness/           # 生成物：插件安装单元
 template/                     # 生成物：复制式安装
 contracts/schema/             # 表契约 JSON Schema（ODCS 精简）
 examples/demo/                # 订单表端到端 fixtures + 反例 a-f
-tests/                        # 120 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
+tests/                        # 123 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
 ```
 
 ## 六层防线（v1 五层升级）
