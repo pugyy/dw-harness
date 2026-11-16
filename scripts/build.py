@@ -22,6 +22,8 @@ MARKETPLACE = REPO / ".claude-plugin" / "marketplace.json"
 
 SKIP_COPY = {"__pycache__", "*.pyc", ".DS_Store"}
 
+TEXT_SUFFIXES = {".py", ".md", ".json", ".tmpl", ".yml", ".yaml", ".txt", ".ps1", ".sh"}
+
 
 def version() -> str:
     for line in (SRC / "dw_core" / "__init__.py").read_text(encoding="utf-8").splitlines():
@@ -32,6 +34,19 @@ def version() -> str:
 
 def hook_config() -> Dict:
     return json.loads((SRC / "hooks.config.json").read_text(encoding="utf-8"))
+
+
+def _write_bytes_deterministic(path: Path, data: bytes) -> None:
+    """Write with platform-independent bytes: text content always LF."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def _copy_deterministic(src: Path, dst: Path) -> None:
+    data = src.read_bytes()
+    if src.suffix.lower() in TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n")
+    _write_bytes_deterministic(dst, data)
 
 
 def copy_tree(src: Path, dst: Path) -> None:
@@ -47,8 +62,7 @@ def copy_tree(src: Path, dst: Path) -> None:
         if item.is_dir():
             target.mkdir(parents=True, exist_ok=True)
         else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(item, target)
+            _copy_deterministic(item, target)
 
 
 def plugin_hook_entry(event: str, block: Dict) -> Dict:
@@ -132,7 +146,8 @@ def build(target_root: Path) -> List[str]:
     copy_tree(SRC / "agents", plugin / "agents")
     copy_tree(SRC / "output-styles", plugin / "output-styles")
     copy_tree(REPO / "mcp", plugin / "mcp")
-    (plugin / "README.md").write_text(PLUGIN_README, encoding="utf-8")
+    _write_bytes_deterministic(plugin / "README.md",
+                               PLUGIN_README.replace("\r\n", "\n").encode("utf-8"))
     actions.append("plugins/dw-harness rebuilt")
 
     template = target_root / "template"
@@ -147,21 +162,21 @@ def build(target_root: Path) -> List[str]:
     copy_tree(SRC / "agents", template / ".claude" / "agents")
     copy_tree(SRC / "output-styles", template / ".claude" / "output-styles")
     scaffold = SRC / "scaffold"
-    shutil.copyfile(scaffold / "CLAUDE.md", template / "CLAUDE.md")
-    shutil.copyfile(scaffold / "AGENTS.md", template / "AGENTS.md")
+    _copy_deterministic(scaffold / "CLAUDE.md", template / "CLAUDE.md")
+    _copy_deterministic(scaffold / "AGENTS.md", template / "AGENTS.md")
     copy_tree(scaffold / "rules", template / ".claude" / "rules")
     (template / ".claude" / "dw").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(scaffold / "harness.json", template / ".claude" / "dw" / "harness.json")
-    shutil.copyfile(scaffold / "state.json", template / ".claude" / "dw" / "state.json")
-    shutil.copyfile(scaffold / "v1_hashes.json", template / ".claude" / "dw" / "v1_hashes.json")
-    shutil.copyfile(scaffold / "policy_exceptions.json",
-                    template / ".claude" / "dw" / "policy_exceptions.json")
+    _copy_deterministic(scaffold / "harness.json", template / ".claude" / "dw" / "harness.json")
+    _copy_deterministic(scaffold / "state.json", template / ".claude" / "dw" / "state.json")
+    _copy_deterministic(scaffold / "v1_hashes.json", template / ".claude" / "dw" / "v1_hashes.json")
+    _copy_deterministic(scaffold / "policy_exceptions.json",
+                        template / ".claude" / "dw" / "policy_exceptions.json")
     (template / ".claude" / "dw" / "mcp").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(REPO / "mcp" / "server.py",
-                    template / ".claude" / "dw" / "mcp" / "server.py")
+    _copy_deterministic(REPO / "mcp" / "server.py",
+                        template / ".claude" / "dw" / "mcp" / "server.py")
     (template / "contracts").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(scaffold / "contract.example.json",
-                    template / "contracts" / "contract.example.json")
+    _copy_deterministic(scaffold / "contract.example.json",
+                        template / "contracts" / "contract.example.json")
     actions.append("template/ rebuilt (copy-mode install, original command names)")
 
     write_json(target_root / ".claude-plugin" / "marketplace.json", {
