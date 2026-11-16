@@ -1,0 +1,8 @@
+{
+  "name": "starrocks",
+  "aliases": ["sr"],
+  "engine_notes": "StarRocks: INSERT may omit PARTITION (auto routing); tables need a key model and distribution; ALTER via ADD/MODIFY COLUMN.",
+  "rule_levels": {"insert-requires-partition": "warn"},
+  "type_aliases": {"decimal": "decimal"},
+  "ddl_keywords": ["PRIMARY KEY", "DUPLICATE KEY", "UNIQUE KEY", "DISTRIBUTED BY HASH", "PROPERTIES"]
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/pugyy/dw-harness/main/contracts/schema/contract.schema.json",
+  "title": "dw-harness table contract",
+  "type": "object",
+  "required": ["contract_id", "owner", "granularity", "business_keys", "columns", "version"],
+  "properties": {
+    "contract_id": {"type": "string", "description": "stable id, usually the schema-qualified table"},
+    "table": {"type": "string"},
+    "version": {"type": ["string", "integer"]},
+    "owner": {"type": "string"},
+    "granularity": {"type": "string", "description": "one row per ..."},
+    "business_keys": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "partition": {
+      "type": "object",
+      "properties": {
+        "column": {"type": "string"},
+        "type": {"type": "string"},
+        "format": {"type": "string", "examples": ["yyyyMMdd"]}
+      }
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"type": "string", "examples": ["string", "decimal(20,4)", "bigint"]},
+          "precision": {"type": "integer"},
+          "scale": {"type": "integer"},
+          "nullable": {"type": "boolean"},
+          "currency": {"type": "string", "enum": ["CNY", "USD", "EUR", "JPY", "GBP", "HKD"]},
+          "unit": {"type": "string", "enum": ["fen", "cent", "yuan", "qian_yuan", "thousand", "million", "share", "percent", "ratio"]},
+          "caliber": {"type": "string", "description": "业务含义|数据来源|计算逻辑"},
+          "source": {"type": "string"}
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "row_count_fluctuation_max": {"type": "string"},
+        "money_tolerance": {"type": "string"},
+        "freshness_days": {"type": "integer"}
+      }
+    },
+    "sla": {
+      "type": "object",
+      "properties": {"time": {"type": "string"}, "tz": {"type": "string"}}
+    },
+    "sources": {"type": "array", "items": {"type": "string"}}
+  }
+}

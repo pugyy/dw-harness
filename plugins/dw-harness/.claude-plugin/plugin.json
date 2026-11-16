@@ -1,0 +1,39 @@
+{
+  "name": "dw-harness",
+  "version": "2.0.0",
+  "description": "Data warehouse AI engineering layer: guards, contracts, reconciliation and the 8-step workflow for MaxCompute -> StarRocks.",
+  "author": {
+    "name": "pugyy"
+  },
+  "userConfig": {
+    "python": {
+      "type": "string",
+      "title": "Python interpreter",
+      "description": "python / python3 / py -3 or an absolute path",
+      "default": "python"
+    },
+    "dialect": {
+      "type": "string",
+      "title": "Default SQL dialect",
+      "options": [
+        {
+          "value": "odps",
+          "label": "ODPS / MaxCompute"
+        },
+        {
+          "value": "hive",
+          "label": "Hive"
+        },
+        {
+          "value": "spark",
+          "label": "Spark"
+        },
+        {
+          "value": "starrocks",
+          "label": "StarRocks"
+        }
+      ],
+      "default": "odps"
+    }
+  }
+}

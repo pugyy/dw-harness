@@ -1,49 +1,105 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/validate_sql.py",
-            "timeout": 60,
-            "statusMessage": "检查 SQL 规范..."
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_shell.py"
+            ],
+            "timeout": 20,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_write.py"
+            ],
+            "timeout": 20,
+            "onFailure": "block"
           }
         ]
       }
     ],
-    "PreToolUse": [
+    "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/block_dangerous_ddl.py",
-            "timeout": 10
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/validate_post.py"
+            ],
+            "timeout": 60
           }
         ]
       }
     ],
     "SessionStart": [
       {
-        "matcher": "compact",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/inject_context.py",
-            "timeout": 10,
-            "statusMessage": "重注入数仓规范..."
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/session_context.py"
+            ],
+            "timeout": 10
           }
         ]
       }
     ],
-    "Stop": [
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/post_compact.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "FileChanged": [
+      {
+        "matcher": "**/*.sql",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/file_changed.py"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
       {
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "检查数仓规范执行结果：是否所有 SQL 文件都通过了规范检查？待确认问题清单是否完整？"
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/handoff.py"
+            ],
+            "timeout": 10
           }
         ]
       }

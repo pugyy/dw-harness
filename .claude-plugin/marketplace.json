@@ -1,0 +1,13 @@
+{
+  "name": "dw-harness",
+  "owner": "pugyy",
+  "plugins": [
+    {
+      "name": "dw-harness",
+      "source": "./plugins/dw-harness",
+      "description": "Data warehouse AI engineering layer (guards, contracts, reconciliation, 8-step workflow)",
+      "version": "2.0.0",
+      "category": "data"
+    }
+  ]
+}

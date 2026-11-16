@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "dialect": {
+    "default": "odps",
+    "by_path": {
+      "**/sr/**": "starrocks",
+      "**/*_sr_*.sql": "starrocks",
+      "**/spark/**": "spark",
+      "**/*_spark*.sql": "spark",
+      "**/hive/**": "hive",
+      "**/*_hive*.sql": "hive"
+    }
+  },
+  "rules": {
+    "no-select-star": "error",
+    "insert-requires-partition": "error",
+    "dml-requires-where": "error",
+    "partition-name": "error",
+    "money-decimal": "error",
+    "money-precision": "warn",
+    "column-comments": "off"
+  },
+  "money_fields": "amount|amt|price|fee|cost|money|pay|revenue|gmv|refund|tax|balance|net_amount",
+  "partition_column": "partition_dt",
+  "protected_objects": [],
+  "pii": {
+    "enabled": true,
+    "scan_globs": ["**/*.sql", "**/*.csv", "**/data/**"],
+    "patterns": ["cn_phone", "cn_id_card", "bank_card"],
+    "action": "warn"
+  },
+  "guard": {
+    "destructive": "deny",
+    "overwrite_without_partition": "ask",
+    "future_partition": "ask",
+    "unknown_write": "ask"
+  },
+  "reconcile": {"sample_rows": 20, "max_rows": 1000000, "query_timeout_seconds": 60},
+  "evidence": {"freshness_hours": 72}
+}
