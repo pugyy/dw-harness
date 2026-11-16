@@ -16,8 +16,10 @@ import sys
 from pathlib import Path
 
 INSTALL_ROOT = Path(__file__).resolve().parent.parent
-if str(INSTALL_ROOT) not in sys.path:
-    sys.path.insert(0, str(INSTALL_ROOT))
+for candidate in (INSTALL_ROOT, INSTALL_ROOT.parent, INSTALL_ROOT / "src"):
+    if (candidate / "dw_core").is_dir():
+        sys.path.insert(0, str(candidate))
+        break
 
 from dw_core import __version__  # noqa: E402
 
@@ -74,6 +76,13 @@ def _root() -> Path:
     return cur
 
 
+def _project_path(root: Path, path: Path) -> Path:
+    resolved = (root / path).resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        raise ValueError("path lies outside the project")
+    return resolved
+
+
 def _tool_lint_sql(params: dict) -> dict:
     from dw_core.config import HarnessConfig
     from dw_core.rules import lint_sql
@@ -95,9 +104,15 @@ def _tool_get_contract(params: dict) -> dict:
         if not matches:
             return {"error": "no contract found; pass explicit path"}
         path = matches[0]
-    if not path.is_absolute():
-        path = _root() / path
     try:
+        root = _root()
+        path = _project_path(root, path)
+        if (path.suffix.lower() not in {".json", ".yaml", ".yml"} or
+                (not path.is_relative_to(root / "contracts") and
+                 (path.parent != root or path.stem != "contract"))):
+            raise ValueError("path must point to a project contract")
+        if path.stat().st_size > 2 * 1024 * 1024:
+            raise ValueError("contract exceeds the response size limit")
         contract, _ = load_contract(path)
     except Exception as exc:  # noqa: BLE001
         return {"error": f"contract unreadable: {exc}"}
@@ -115,8 +130,9 @@ def _tool_get_table_schema(params: dict) -> dict:
         if any(part in (".git", ".claude", "node_modules") for part in sql_file.parts):
             continue
         try:
+            sql_file = _project_path(root, sql_file)
             tables = parse_create_table(sql_file.read_text(encoding="utf-8-sig", errors="replace"))
-        except OSError:
+        except (OSError, ValueError):
             continue
         for table in tables:
             if want in table.table.lower():
@@ -144,11 +160,19 @@ def _tool_get_lineage(params: dict) -> dict:
 def _tool_get_check_report(params: dict) -> dict:
     root = _root()
     path = Path(params.get("path") or "") if params.get("path") else root / ".claude" / "dw" / "check_report.json"
-    if not path.is_absolute():
-        path = root / path
+    path = _project_path(root, path)
+    if path.suffix.lower() != ".json" or not any(
+            path.is_relative_to(root / folder) for folder in (".claude/dw", "reports")):
+        raise ValueError("report must be under .claude/dw or reports")
     if not path.is_file():
-        return {"error": f"no check report at {path}; run `dw check` first"}
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+        return {"error": "no check report; run dw check first"}
+    if path.stat().st_size > 2 * 1024 * 1024:
+        raise ValueError("report exceeds the response size limit")
+    report = json.loads(path.read_text(encoding="utf-8-sig"))
+    if (not isinstance(report, dict) or
+            report.get("schema") not in {"dw-check/1", "dw-check-batch/1"}):
+        raise ValueError("file is not a dw check report")
+    return report
 
 
 HANDLERS = {

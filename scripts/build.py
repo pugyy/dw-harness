@@ -53,7 +53,7 @@ def copy_tree(src: Path, dst: Path) -> None:
 
 def plugin_hook_entry(event: str, block: Dict) -> Dict:
     hook = {"type": "command",
-            "command": "${user_config.python}",
+            "command": "python",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/" + block["script"]],
             "timeout": block.get("timeout", 30)}
     if "onFailure" in block:
@@ -77,16 +77,15 @@ def template_hook_entry(block: Dict) -> Dict:
 
 def write_json(path: Path, data: Dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 PLUGIN_README = """# dw-harness plugin
 
-Install-time options (userConfig):
-- `python`: single executable path used by hook scripts (default `python`;
-  on Windows prefer an absolute python.exe path — the exec form takes ONE
-  command plus fixed args)
-- `dialect`: default SQL dialect (odps / hive / spark / starrocks)
+Hooks resolve Python 3.9+ as `python` on PATH. Activate the intended Python
+environment before launching Claude Code. The copy template also accepts a
+custom interpreter via `dw init --python`.
 
 Hooks: PreToolUse guards (fail-closed: onFailure block + in-script deny
 fallback), PostToolUse SQL write-after feedback, SessionStart state card,
@@ -103,8 +102,7 @@ use `dw init --mcp`).
 
 Project-side files (AGENTS.md, rules, harness.json, contracts) are generated
 by the `dw-bootstrap` skill / `dw init` — they are intentionally NOT shipped
-by the plugin. Requires Claude Code >= 2.1.295 (userConfig options + hook
-onFailure).
+by the plugin. Requires Claude Code >= 2.1.295 for hook onFailure.
 """
 
 
@@ -124,25 +122,6 @@ def build(target_root: Path) -> List[str]:
         "description": "Data warehouse AI engineering layer: guards, contracts, "
                        "reconciliation and the 8-step workflow for MaxCompute -> StarRocks.",
         "author": {"name": "pugyy"},
-        "userConfig": {
-            "python": {
-                "type": "string",
-                "title": "Python interpreter",
-                "description": "python / python3 / py -3 or an absolute path",
-                "default": "python",
-            },
-            "dialect": {
-                "type": "string",
-                "title": "Default SQL dialect",
-                "options": [
-                    {"value": "odps", "label": "ODPS / MaxCompute"},
-                    {"value": "hive", "label": "Hive"},
-                    {"value": "spark", "label": "Spark"},
-                    {"value": "starrocks", "label": "StarRocks"},
-                ],
-                "default": "odps",
-            },
-        },
     })
     hooks_json = {event: [plugin_hook_entry(event, b) for b in blocks]
                   for event, blocks in cfg["hooks"].items()}
@@ -174,6 +153,7 @@ def build(target_root: Path) -> List[str]:
     (template / ".claude" / "dw").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(scaffold / "harness.json", template / ".claude" / "dw" / "harness.json")
     shutil.copyfile(scaffold / "state.json", template / ".claude" / "dw" / "state.json")
+    shutil.copyfile(scaffold / "v1_hashes.json", template / ".claude" / "dw" / "v1_hashes.json")
     shutil.copyfile(scaffold / "policy_exceptions.json",
                     template / ".claude" / "dw" / "policy_exceptions.json")
     (template / ".claude" / "dw" / "mcp").mkdir(parents=True, exist_ok=True)
@@ -186,6 +166,7 @@ def build(target_root: Path) -> List[str]:
 
     write_json(target_root / ".claude-plugin" / "marketplace.json", {
         "name": "dw-harness",
+        "description": "Warehouse change checks for MaxCompute and StarRocks.",
         "owner": {"name": "pugyy"},
         "plugins": [{
             "name": "dw-harness",

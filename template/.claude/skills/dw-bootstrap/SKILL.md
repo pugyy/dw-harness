@@ -15,6 +15,8 @@ allowed-tools: Read, Write, Edit, Glob, Bash(dw init:*), Bash(dw doctor:*)
 dw init --target . --python python
 ```
 
+插件中调用时加 \`--mode plugin\`，只安装项目文件。
+
 2. 首次安装检查：`dw doctor`
 3. v1 项目升级：旧 hook 自动停用，八个旧命令对照见 `docs/upgrade-from-v1.md`
    （插件模式命令带 `dw-harness:` 前缀；模板模式保留原名）

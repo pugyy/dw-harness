@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--python", default="python", help="interpreter used by hooks")
     p.add_argument("--dialect", default="", help="default SQL dialect")
     p.add_argument("--dry-run", action="store_true", help="preview only, write nothing")
+    p.add_argument("--mode", choices=["template", "plugin"], default="template")
     p.add_argument("--mcp", action="store_true", help="register the local stdio MCP server")
     p.add_argument("--statusline", action="store_true",
                    help="add the dw statusLine entry (keeps an existing user statusLine)")
@@ -83,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--spec", required=True, help="JSON spec file")
     p.add_argument("--save-evidence", action="store_true")
     p.add_argument("--contract", default="", help="bind contract digest into evidence")
+    p.add_argument("--baseline", default="", help="bind the contract baseline file or Git revision")
     p.add_argument("--sql", action="append", default=[],
                    help="bind sql file digest into evidence (repeatable)")
     p.add_argument("--ddl", action="append", default=[],
@@ -100,7 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--baseline", default="")
     p.add_argument("--reconcile-spec", default="", help="spec file bound to the evidence")
     p.add_argument("--changed", action="store_true",
-                   help="batch mode: take changed files from git (diff vs default branch)")
+                   help="check all affected tables against the Git base")
+    p.add_argument("--base-ref", default="", help="Git revision for --changed")
     p.add_argument("--mode", choices=["strict", "local"], default="strict")
     p.add_argument("--out-json", default="")
     p.add_argument("--out-md", default="")
@@ -122,40 +125,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _changed_files(root: Path, suffixes) -> List[Path]:
-    """Changed files vs the default branch (fallback: last commit)."""
+def _changed_files(root: Path, suffixes, base_ref: str = "", include_deleted: bool = False):
+    """Return the base commit and changed paths, preserving spaces and Unicode."""
     import subprocess
 
     def git(*argv):
-        return subprocess.run(["git", *argv], cwd=str(root), capture_output=True,
-                              text=True, timeout=30, check=True).stdout
+        return subprocess.run(["git", *argv], cwd=root, capture_output=True,
+                              timeout=30, check=True).stdout.decode("utf-8")
 
-    names: List[str] = []
-    for base in ("origin/main", "main", "HEAD~1"):
+    refs = (base_ref,) if base_ref else ("origin/main", "main", "HEAD~1")
+    for ref in refs:
         try:
-            names = git("diff", "--name-only", base).split()
-            names += git("diff", "--name-only").split()  # unstaged on top
-            break
-        except Exception:
+            base = git("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}").strip()
+            names = git("diff", "--name-only", "-z", base, "--").split("\0")
+            names += git("ls-files", "--others", "--exclude-standard", "-z").split("\0")
+            return base, [root / n for n in dict.fromkeys(names)
+                          if n and not n.startswith((".", "plugins/", "template/"))
+                          and Path(n).suffix.lower() in suffixes
+                          and (include_deleted or (root / n).is_file())]
+        except (subprocess.SubprocessError, OSError):
             continue
-    return [root / n for n in dict.fromkeys(names)
-            if n and not n.startswith((".", "plugins/", "template/"))
-            and Path(n).suffix.lower() in suffixes and (root / n).is_file()]
-
-
-def _resolve_baseline(spec: str, root: Path) -> Path:
-    """File path, or git:<rev>:<path> resolved via `git show` (no shell)."""
-    import subprocess
-    import tempfile
-    if not spec.startswith("git:"):
-        return Path(spec)
-    _, rev, path = spec.split(":", 2)
-    out = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=str(root),
-                         capture_output=True, text=True, timeout=30, check=True).stdout
-    tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
-    tmp.write(out)
-    tmp.close()
-    return Path(tmp.name)
+    raise ValueError("no usable Git baseline; specify --base-ref for dw check --changed")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -170,8 +160,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         template_root = Path(args.scaffold).resolve() if args.scaffold else None
         if template_root is None:
             here = Path(__file__).resolve()
-            for candidate in (here.parents[2] / "template",          # repo checkout
-                              here.parents[1] / "template"):
+            for candidate in (here.parent / "data" / "template",  # wheel
+                              here.parents[2] / "template"):        # editable checkout
                 if (candidate / ".claude").is_dir():
                     template_root = candidate
                     break
@@ -180,9 +170,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 2
         report = run_init(target, template_root, args.python, args.dialect,
                           dry_run=args.dry_run, mcp=args.mcp,
-                          statusline=args.statusline)
+                          statusline=args.statusline, mode=args.mode)
         print(_json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
-        return 0
+        return 2 if report.conflicts else 0
 
     if args.cmd == "doctor":
         from .doctor import run_doctor
@@ -193,7 +183,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         from .rules import lint_sql
         files = list(args.files)
         if args.changed:
-            files = [str(p) for p in _changed_files(root, {".sql"})] or files
+            try:
+                _, changed = _changed_files(root, {".sql"})
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            files.extend(str(p) for p in changed)
+            files = list(dict.fromkeys(files))
         if not files:
             print("lint: no files (pass files or --changed)")
             return 2
@@ -231,7 +227,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
         if args.contract_cmd == "diff":
             current, _ = contracts.load_contract(path)
-            baseline, _ = contracts.load_contract(_resolve_baseline(args.baseline, root))
+            baseline, _ = contracts.read_baseline(args.baseline, root)
             changes = contracts.diff_contracts(current, baseline)
             _print_json({"from": baseline["digest"], "to": current["digest"],
                          "baseline": args.baseline, "changes": changes})
@@ -239,7 +235,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.contract_cmd == "decide":
             from datetime import date
             current, _ = contracts.load_contract(path)
-            baseline, _ = contracts.load_contract(_resolve_baseline(args.baseline, root))
+            baseline, _ = contracts.read_baseline(args.baseline, root)
             contracts.record_decision(root, current["contract_id"], {
                 "date": date.today().isoformat(),
                 "approver": args.approver,
@@ -291,92 +287,104 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     if args.cmd == "reconcile":
+        from .contracts import read_baseline
         from .reconcile import ReconcileSpec, reconcile
-        from .evidence import build_evidence, save_evidence, text_digest
-        from .evidence import file_digest
+        from .evidence import (build_evidence, evidence_policy, file_digest,
+                               path_binding, save_evidence)
         try:
-            spec_raw = json.loads(Path(args.spec).read_text(encoding="utf-8-sig"))
-        except (json.JSONDecodeError, OSError) as exc:
-            _print_json({"status": "unverified",
-                         "reasons": [f"spec unreadable: {exc}"]})
-            return 2
-        spec_keys = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
-        try:
-            spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
-        except (TypeError, ValueError) as exc:
-            _print_json({"status": "unverified",
-                         "reasons": [f"spec malformed: {type(exc).__name__}: {exc}"]})
+            spec_path = Path(args.spec).resolve()
+            spec_raw, spec = ReconcileSpec.load(spec_path)
+            inputs = {}
+            binding_paths = {}
+            if args.save_evidence:
+                scope = spec.evidence_scope(spec_raw.get("table"))
+                bindings = spec_raw.get("bindings") or {}
+                baseline = args.baseline or bindings.get("baseline")
+                inputs["contract-baseline"] = read_baseline(baseline, root)[1] if baseline else "none"
+                inputs["policy"] = evidence_policy(config)
+                bound = {"reconcile:spec": spec_path, **spec.file_inputs()}
+                contract_path = args.contract or bindings.get("contract")
+                if contract_path:
+                    bound["contract"] = Path(contract_path)
+                for prefix, names in (("sql", args.sql), ("ddl", args.ddl)):
+                    for name in [*names, *(bindings.get(prefix) or [])]:
+                        path = Path(name).resolve()
+                        role = f"{prefix}:{path_binding(path, root)}"
+                        bound[role] = path
+                        binding_paths[role] = path_binding(path, root)
+                inputs.update({role: file_digest(path) for role, path in bound.items()})
+        except Exception as exc:
+            _print_json({"status": "unverified", "reasons": [f"invalid reconciliation inputs: {exc}"]})
             return 2
         result = reconcile(spec)
         payload = {"spec": spec.to_dict(), **result.to_dict()}
         if args.save_evidence and result.status != "unverified":
-            # canonical evidence roles, shared with `dw check` verification:
-            # contract / sql:<name> / ddl:<name> / reconcile:spec
-            inputs = {"reconcile:spec": text_digest(json.dumps(spec.to_dict(), sort_keys=True))}
-            binding_paths: Dict[str, str] = {"reconcile:spec": str(Path(args.spec).resolve())}
-            bindings = dict(spec_raw.get("bindings") or {})
-            contract_path = args.contract or bindings.get("contract")
-            if contract_path and Path(contract_path).is_file():
-                inputs["contract"] = file_digest(Path(contract_path))
-                binding_paths["contract"] = str(Path(contract_path))
-            for role_prefix, cli_list in (("sql", args.sql), ("ddl", args.ddl)):
-                for name in [*cli_list, *(bindings.get(role_prefix) or [])]:
-                    if Path(name).is_file():
-                        role = f"{role_prefix}:{Path(name).name}"
-                        inputs[role] = file_digest(Path(name))
-                        binding_paths[role] = str(Path(name))
-            ev = build_evidence(
-                f"reconcile-{spec_raw.get('table', 'table')}",
-                inputs,
-                {"status": result.status}, root,
-                environments={"left": spec.left, "right": spec.right},
-                producer="dw-reconcile",
-                binding_paths=binding_paths)
-            save_evidence(ev, root, f"reconcile-{spec_raw.get('table', 'table')}")
-            payload["evidence"] = "saved"
+            try:
+                changed = any(file_digest(path) != inputs[role] for role, path in bound.items())
+                changed |= evidence_policy(HarnessConfig.load(root=root)) != inputs["policy"]
+                if baseline:
+                    changed |= read_baseline(baseline, root)[1] != inputs["contract-baseline"]
+                if changed:
+                    raise ValueError("reconciliation inputs changed during verification")
+                name = f"reconcile-{scope['table']}"
+                ev = build_evidence(name, inputs, {"status": result.status}, root,
+                                    environments={"left": spec.left, "right": spec.right},
+                                    producer="dw-reconcile", scope=scope, binding_paths=binding_paths)
+                save_evidence(ev, root, name)
+                payload["evidence"] = "saved"
+            except Exception as exc:
+                payload["status"] = "unverified"
+                payload["reasons"].append(f"evidence was not saved: {exc}")
         _print_json(payload)
-        return 0 if result.status == "pass" else (1 if result.status == "fail" else 2)
+        return {"pass": 0, "fail": 1, "unverified": 2}[payload["status"]]
 
     if args.cmd == "check":
-        from .check import run_checks
-        sql_paths = [Path(p) for p in args.sql]
-        contract_path = Path(args.contract) if args.contract else None
-        ddl_path = Path(args.ddl) if args.ddl else None
-        dqc_path = Path(args.dqc) if args.dqc else None
-        table = args.table
+        from subprocess import SubprocessError
+        from .check import CheckItem, CheckReport, run_checks
+        from .batch import resolve_table_checks
+        options = {
+            "sql_files": [Path(p) for p in args.sql],
+            "contract_path": Path(args.contract) if args.contract else None,
+            "ddl_path": Path(args.ddl) if args.ddl else None,
+            "dqc_path": Path(args.dqc) if args.dqc else None,
+            "baseline": args.baseline or None,
+            "reconcile_spec": Path(args.reconcile_spec) if args.reconcile_spec else None,
+        }
+        reports = []
         if args.changed:
-            changed = _changed_files(root, {".sql", ".json"})
-            sql_paths.extend(p for p in changed if p.suffix == ".sql")
-            for p in changed:
-                if p.suffix != ".json":
-                    continue
-                name = p.name.lower()
-                if name.startswith("contract"):
-                    contract_path = contract_path or p
-                elif name.startswith("ddl_"):
-                    ddl_path = ddl_path or p
-                elif name.startswith("dqc_"):
-                    dqc_path = dqc_path or p
-            if not table and contract_path:
-                from .contracts import load_contract
-                table = load_contract(contract_path)[0].get("table", "")
-            if not table:
-                print("check --changed: could not infer table (pass --table)")
+            try:
+                if not args.table and any(options.values()):
+                    raise ValueError("table-specific overrides require --table with --changed")
+                base, paths = _changed_files(root, {".sql", ".json", ".yaml", ".yml"},
+                                             args.base_ref, include_deleted=True)
+                targets, unresolved = resolve_table_checks(root, base, paths, args.table)
+                for table, inferred in targets.items():
+                    values = {**inferred, **{k: v for k, v in options.items() if v}}
+                    values["sql_files"] = list(dict.fromkeys(
+                        inferred.get("sql_files", []) + options["sql_files"]))
+                    reports.append(run_checks(config, table, args.env, args.partition,
+                                              mode=args.mode, **values))
+                if unresolved or not reports:
+                    report = CheckReport("(changeset)", args.env, args.partition, mode=args.mode)
+                    report.items.append(CheckItem(
+                        "changeset-scope", "unverified",
+                        "unresolved changes: " + ", ".join(unresolved) if unresolved
+                        else "no affected tables identified"))
+                    reports.append(report)
+            except (OSError, ValueError, SubprocessError) as exc:
+                report = CheckReport("(changeset)", args.env, args.partition, mode=args.mode)
+                report.items.append(CheckItem("changeset-scope", "unverified", str(exc)))
+                reports.append(report)
+        else:
+            if not args.table:
+                print("check: --table required (or use --changed)", file=sys.stderr)
                 return 2
-        if not table:
-            print("check: --table required (or use --changed)")
-            return 2
-        report = run_checks(
-            config, table, args.env, args.partition,
-            sql_files=sql_paths or None,
-            contract_path=contract_path,
-            ddl_path=ddl_path,
-            dqc_path=dqc_path,
-            baseline=Path(args.baseline) if args.baseline else None,
-            reconcile_spec=Path(args.reconcile_spec) if args.reconcile_spec else None,
-            mode=args.mode)
-        payload = report.to_dict()
-        md = report.to_markdown()
+            reports.append(run_checks(config, args.table, args.env, args.partition,
+                                      mode=args.mode, **options))
+        exit_code = 1 if any(r.exit_code == 1 for r in reports) else max(r.exit_code for r in reports)
+        payload = ({"schema": "dw-check-batch/1", "exit_code": exit_code,
+                    "reports": [r.to_dict() for r in reports]} if args.changed else reports[0].to_dict())
+        md = "\n".join(report.to_markdown() for report in reports)
         if args.out_json:
             Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
             Path(args.out_json).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -384,7 +392,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
             Path(args.out_md).write_text(md, encoding="utf-8")
         print(md)
-        return report.exit_code
+        return exit_code
 
     if args.cmd == "next":
         from .state import infer_step, load_state
@@ -409,7 +417,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.cmd == "mcp" and args.selftest:
         from .mcp_selftest import mcp_selftest
-        ok = mcp_selftest()
+        ok = mcp_selftest(root=root)
         print("mcp selftest:", "ok" if ok else "failed")
         return 0 if ok else 1
 

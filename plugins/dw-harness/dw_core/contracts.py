@@ -27,6 +27,10 @@ class ContractError(Exception):
 
 def _load_any(path: Path) -> Dict[str, Any]:
     text = path.read_text(encoding="utf-8-sig")
+    return _parse_contract(text, path)
+
+
+def _parse_contract(text: str, path: Path) -> Dict[str, Any]:
     suffix = path.suffix.lower()
     if suffix in (".yaml", ".yml"):
         try:
@@ -42,6 +46,24 @@ def _load_any(path: Path) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise ContractError(f"{path.name}: contract must be a mapping")
     return data
+
+
+def read_baseline(source, root: Path) -> Tuple[Dict[str, Any], str]:
+    """Read a file or an immutable Git blob, keeping its format and byte hash."""
+    import subprocess
+    spec = str(source)
+    if spec.startswith("git:"):
+        _, revision, name = spec.split(":", 2)
+        if not revision or revision.startswith("-") or not name:
+            raise ContractError("invalid Git baseline; expected git:<revision>:<path>")
+        path = Path(name)
+        blob = subprocess.run(
+            ["git", "show", f"{revision}:{name}"], cwd=root, capture_output=True,
+            timeout=30, check=True).stdout
+    else:
+        path = root / Path(spec)
+        blob = path.read_bytes()
+    return normalize(_parse_contract(blob.decode("utf-8-sig"), path)), hashlib.sha256(blob).hexdigest()
 
 
 def _digest(obj: Any) -> str:

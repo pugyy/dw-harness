@@ -14,7 +14,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,254}$")
+IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}$")
 UNIT_FACTORS = {  # to the smallest unit (fen) for CNY-style scaling
     "fen": Decimal(1), "cent": Decimal(1), "yuan": Decimal(100),
     "qian_yuan": Decimal(100000), "thousand": Decimal(100000),
@@ -36,6 +36,42 @@ class ReconcileSpec:
                 "metrics": self.metrics, "sample_rows": self.sample_rows,
                 "max_rows": self.max_rows}
 
+    @classmethod
+    def load(cls, path: Path) -> Tuple[Dict, "ReconcileSpec"]:
+        import json
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(raw, dict):
+            raise ValueError("reconciliation spec must be an object")
+        fields = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
+        spec = cls(**{k: raw[k] for k in fields if k in raw})
+        for side in ("left", "right"):
+            desc = getattr(spec, side)
+            if not isinstance(desc, dict):
+                raise ValueError(f"{side} must be an object")
+            if desc.get("adapter", "file") == "file" and desc.get("path"):
+                desc = {**desc, "path": str((path.resolve().parent / desc["path"]).resolve())}
+                setattr(spec, side, desc)
+        return raw, spec
+
+    def evidence_scope(self, table: str) -> Dict:
+        if not isinstance(table, str) or not IDENT_RE.fullmatch(table):
+            raise ReconcileError("an explicit target table is required for evidence")
+        offline = self.right.get("adapter", "file") == "file"
+        environment = "offline" if offline else self.right.get("environment")
+        if not offline and (not environment or environment == "offline"):
+            raise ReconcileError("right.environment must identify the database environment")
+        if not offline and self.right.get("table") != table:
+            raise ReconcileError("right.table must match the evidence target")
+        partition = self.right.get("partition")
+        if not isinstance(partition, str) or not partition.strip():
+            raise ReconcileError("right.partition is required for evidence")
+        return {"table": table, "environment": environment, "partition": partition}
+
+    def file_inputs(self) -> Dict[str, Path]:
+        return {f"reconcile:{side}:file": Path(desc["path"])
+                for side, desc in (("left", self.left), ("right", self.right))
+                if desc.get("adapter", "file") == "file"}
+
 
 class ReconcileError(Exception):
     pass
@@ -45,7 +81,10 @@ def _to_decimal(raw) -> Optional[Decimal]:
     if raw is None or raw == "":
         return None
     try:
-        return Decimal(str(raw).strip().replace(",", ""))
+        value = Decimal(str(raw).strip().replace(",", ""))
+        if not value.is_finite():
+            raise InvalidOperation
+        return value
     except (InvalidOperation, ValueError):
         raise ReconcileError(f"value not numeric: {raw!r}")
 
@@ -67,8 +106,17 @@ class FileAdapter:
         truncated = False
         with self.path.open("r", encoding="utf-8-sig", newline="") as fh:
             reader = csv.DictReader(fh)
+            headers = [name.strip() for name in (reader.fieldnames or [])]
+            missing = sorted(set(self.keys + self.metrics) - set(headers))
+            if missing:
+                raise ReconcileError(f"missing required CSV columns: {', '.join(missing)}")
+            if len(set(headers)) != len(headers):
+                raise ReconcileError("duplicate CSV headers")
+            reader.fieldnames = headers
             for row in reader:
-                rows.append({(k or "").strip(): v for k, v in row.items()})
+                if None in row or any(v is None for v in row.values()):
+                    raise ReconcileError(f"CSV row {reader.line_num} does not match its header")
+                rows.append(row)
                 if len(rows) > limit:
                     truncated = True
                     break
@@ -84,6 +132,10 @@ def _q(identifier: str) -> str:
     return identifier
 
 
+def _quoted(identifier: str) -> str:
+    return ".".join(f"`{part}`" for part in _q(identifier).split("."))
+
+
 class _DbAdapter:
     kind = "db"
 
@@ -91,6 +143,7 @@ class _DbAdapter:
         self.table = desc["table"]
         self.partition = desc.get("partition", "")
         self.partition_column = desc.get("partition_column", "partition_dt")
+        self.partition_name = desc.get("partition_name")
         self.keys = keys
         self.metrics = metrics
         self.timeout = timeout
@@ -136,37 +189,29 @@ class MaxComputeAdapter(_DbAdapter):
                     project=os.environ["DW_HARNESS_ODPS_PROJECT"],
                     endpoint=os.environ["DW_HARNESS_ODPS_ENDPOINT"])
 
-    def partition_count(self) -> Optional[int]:
-        o = self._connect()
-        sql = " ".join([
-            "SELECT COUNT(*) AS cnt FROM", _q(self.table),
-            "WHERE", _q(self.partition_column), "= %s",
-        ])
-        with o.execute_sql(sql, params=(self.partition,)).open_reader(tunnel=True) as reader:
-            for record in reader:
-                values = record.values if hasattr(record, "values") else record
-                return int(values.get("cnt", list(values)[0]) if isinstance(values, dict) else values[0])
-        return None
-
     def _partition_in_metadata(self) -> Optional[bool]:
-        # PyODPS table API (not SQL, so nothing to bind); untested against a
-        # live instance — flagged in docs/support-matrix.md.
+        from odps.types import PartitionSpec
         table = self._connect().get_table(self.table)
-        try:
-            return bool(table.exist_partition({self.partition_column: self.partition}))
-        except AttributeError:
-            return None
+        spec = PartitionSpec()
+        spec[self.partition_column] = self.partition
+        return bool(table.exist_partition(spec))
 
     def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
-        o = self._connect()
-        cols = ", ".join(_q(c) for c in [*self.keys, *self.metrics])
-        sql = " ".join([
-            "SELECT", cols, "FROM", _q(self.table),
-            "WHERE", _q(self.partition_column), "= %s LIMIT %d",
-        ])
-        params = (self.partition, limit + 1)
-        with o.execute_sql(sql, params=params).open_reader(tunnel=True) as reader:  # parameter binding
-            rows = [dict(r.values) for r in reader]
+        from odps import dbapi
+        names = [*self.keys, *self.metrics]
+        cols = ", ".join(_quoted(c) for c in names)
+        sql = (f"SELECT {cols} FROM {_quoted(self.table)} "
+               f"WHERE {_quoted(self.partition_column)} = ? LIMIT ?")
+        conn = dbapi.connect(self._connect())
+        try:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, (self.partition, limit + 1))
+                rows = [dict(zip(names, row)) for row in cursor.fetchmany(limit + 1)]
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
         return rows[:limit], len(rows) > limit
 
 
@@ -195,38 +240,18 @@ class StarRocksAdapter(_DbAdapter):
             cursorclass=pymysql.cursors.DictCursor,
         )
 
-    def partition_count(self) -> Optional[int]:
-        # identifiers allowlist-validated in __init__; partition VALUE bound
-        conn = self._connect()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT COUNT(*) AS cnt FROM {table} "
-                    "WHERE {part_col} = %s".format(table=_q(self.table),
-                                                   part_col=_q(self.partition_column)),
-                    (self.partition,))  # parameter binding
-                row = cursor.fetchone()
-                return int(row["cnt"]) if row else None
-        finally:
-            conn.close()
-
     def _partition_in_metadata(self) -> Optional[bool]:
-        # fully parameter-bound metadata query (no identifiers interpolated)
+        # StarRocks returns PartitionName and Range, rather than Hive-style
+        # partition key/value strings. An explicit partition name supports
+        # projects with a custom naming policy.
+        names = [self.partition_name] if self.partition_name else [self.partition, f"p{self.partition}"]
         conn = self._connect()
         try:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT COUNT(*) AS n FROM information_schema.partitions "
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
-                    (self.table.split(".")[-1],))
-                if int(cursor.fetchone()["n"]) == 0:
-                    return False  # table absent: partitions certainly absent
-                cursor.execute(
-                    "SHOW PARTITIONS FROM {table}".format(table=_q(self.table)))
-                wanted = f"{self.partition_column}={self.partition}".lower()
-                for row in cursor.fetchall():
-                    text = str(row.get("Partition", row.get("partition", "")))
-                    if wanted in text.replace("'", "").replace('"', "").lower():
+                for name in names:
+                    cursor.execute(f"SHOW PARTITIONS FROM {_quoted(self.table)} WHERE PartitionName = %s",
+                                   (name,))
+                    if any(row.get("PartitionName") == name for row in cursor.fetchall()):
                         return True
                 return False
         finally:
@@ -234,12 +259,12 @@ class StarRocksAdapter(_DbAdapter):
 
     def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
         conn = self._connect()
-        cols = ", ".join([f"`{c}`" for c in [*self.keys, *self.metrics]])
+        cols = ", ".join(_quoted(c) for c in [*self.keys, *self.metrics])
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
-                    f"SELECT {cols} FROM {self.table} "
-                    f"WHERE {self.partition_column} = %s LIMIT %s",
+                    f"SELECT {cols} FROM {_quoted(self.table)} "
+                    f"WHERE {_quoted(self.partition_column)} = %s LIMIT %s",
                     (self.partition, limit + 1))  # parameter binding, no string assembly
                 rows = cursor.fetchall()
         finally:
@@ -251,7 +276,11 @@ ADAPTERS = {"file": FileAdapter, "maxcompute": MaxComputeAdapter, "starrocks": S
 
 
 def _key_of(row: Dict, keys: List[str]) -> Tuple:
-    return tuple(str(row.get(k, "")).strip() for k in keys)
+    return tuple(_key_part(row.get(k)) for k in keys)
+
+
+def _key_part(value) -> str:
+    return "" if value is None else str(value).strip()
 
 
 def _unit_factor(unit: Optional[str]) -> Decimal:
@@ -277,7 +306,25 @@ class ReconcileResult:
 
 def reconcile(spec: ReconcileSpec) -> ReconcileResult:
     result = ReconcileResult(status="unverified", reasons=[])
-    metric_cols = [m["column"] for m in spec.metrics]
+    try:
+        metric_cols = [m["column"] for m in spec.metrics]
+        if (not isinstance(spec.keys, list) or not spec.keys or not metric_cols
+                or not all(isinstance(col, str) and col for col in spec.keys + metric_cols)
+                or any(type(n) is not int or n <= 0 for n in (spec.sample_rows, spec.max_rows))):
+            raise ValueError("keys, metrics, sample_rows and max_rows must be nonempty")
+        if not isinstance(spec.left, dict) or not isinstance(spec.right, dict):
+            raise ValueError("left and right must be objects")
+        for metric in spec.metrics:
+            for key in ("abs_tol", "rel_tol"):
+                value = _to_decimal(metric.get(key, 0))
+                if value is None or value < 0:
+                    raise ValueError(f"{key} must be nonnegative")
+            for key in ("unit_left", "unit_right"):
+                if metric.get(key) and str(metric[key]).lower() not in UNIT_FACTORS:
+                    raise ValueError(f"unsupported reconciliation unit: {metric[key]}")
+    except (KeyError, TypeError, ValueError, ReconcileError) as exc:
+        result.reasons.append(f"invalid reconciliation spec: {exc}")
+        return result
     left_desc = spec.left or {}
     right_desc = spec.right or {}
     try:
@@ -320,6 +367,13 @@ def reconcile(spec: ReconcileSpec) -> ReconcileResult:
     try:
         left_rows, trunc_l = left_ad.fetch(spec.max_rows)
         right_rows, trunc_r = right_ad.fetch(spec.max_rows)
+        for side, rows in (("left", left_rows), ("right", right_rows)):
+            for row in rows:
+                missing = set(spec.keys + metric_cols) - row.keys()
+                if missing:
+                    raise ReconcileError(f"{side} missing columns: {', '.join(sorted(missing))}")
+                for col in metric_cols:
+                    _to_decimal(row[col])
     except ReconcileError as exc:
         result.reasons.append(f"adapter error: {exc}")
         return result

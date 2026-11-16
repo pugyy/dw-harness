@@ -41,10 +41,7 @@ class ManifestTests(unittest.TestCase):
         manifest = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["name"], "dw-harness")
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+$")
-        self.assertIn("python", manifest["userConfig"])
-        self.assertTrue(manifest["userConfig"]["dialect"]["options"])
-        for option in manifest["userConfig"]["dialect"]["options"]:
-            self.assertTrue({"value", "label"} <= set(option), option)
+        self.assertNotIn("userConfig", manifest)  # inline loads must not require stored options
 
     def test_marketplace(self):
         path = REPO / ".claude-plugin" / "marketplace.json"

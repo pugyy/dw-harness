@@ -1,5 +1,6 @@
 {
   "name": "dw-harness",
+  "description": "Warehouse change checks for MaxCompute and StarRocks.",
   "owner": {
     "name": "pugyy"
   },

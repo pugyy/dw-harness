@@ -3,6 +3,8 @@ asserting the Claude Code JSON contract on actual payloads (spec item 21)."""
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import subprocess
 import sys
 import unittest
@@ -14,10 +16,11 @@ TEMPLATE_HOOKS = REPO / "template" / ".claude" / "hooks"
 
 
 def _run(hook_dir: Path, script: str, payload: dict):
-    proc = subprocess.run([sys.executable, str(hook_dir / script)],
-                          input=json.dumps(payload), capture_output=True,
-                          text=True, timeout=60, cwd=str(REPO))
-    return proc
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, "CLAUDE_PROJECT_DIR": tmp}
+        return subprocess.run([sys.executable, str(hook_dir / script)],
+                              input=json.dumps(payload), capture_output=True,
+                              text=True, timeout=60, cwd=tmp, env=env)
 
 
 def _json_out(proc) -> dict:
@@ -35,7 +38,7 @@ class PluginWiringTests(unittest.TestCase):
         for block in events["PreToolUse"]:
             for hook in block["hooks"]:
                 self.assertEqual(hook["type"], "command")
-                self.assertEqual(hook["command"], "${user_config.python}")
+                self.assertEqual(hook["command"], "python")
                 self.assertTrue(hook["args"][0].startswith("${CLAUDE_PLUGIN_ROOT}/hooks/"))
                 script = hook["args"][0].split("/")[-1]
                 self.assertTrue((PLUGIN_HOOKS / script).is_file(), script)

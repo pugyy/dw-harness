@@ -31,10 +31,9 @@
 
 | 能力 | 最低版本 |
 |---|---|
-| 插件 userConfig `options` 枚举 | 2.1.271 |
 | **整体声明最低版本（含 hook `onFailure` fail-closed）** | **2.1.295** |
 | AGENTS.md 原生读取（CLAUDE.md 优先） | 2.1.277 |
-| hook `onFailure: block` fail-closed | Agent SDK 0.3.3.317 同期 CLI 版本；低版本由脚本内 fail-closed 兜底 |
+| hook `onFailure: block` fail-closed | 2.1.295，覆盖解释器无法启动的情况 |
 
 声明依据：v2 实际使用的特性 + 官方文档版本标注；`dw doctor` 会做版本相关自检。
 
@@ -43,7 +42,7 @@
 | 适配器 | 状态 | 凭据 |
 |---|---|---|
 | 文件（CSV fixtures，离线演示全链路） | ✅ 已测试 | — |
-| MaxCompute（pyodps） | 存在性走表 API；fetch 的 `execute_sql(params=)` 占位符语义**真机待验**，未连真实实例 | 环境变量，只读身份 |
-| StarRocks（pymysql，参数绑定 + 标识符白名单） | 代码就绪，未连真实实例；分区存在性走 information_schema/SHOW PARTITIONS | 环境变量，只读身份 |
+| MaxCompute（pyodps） | 存在性用表 API；取数用 DBAPI 参数绑定，已覆盖 SDK 接口测试，真实实例待验 | 环境变量，只读身份 |
+| StarRocks（pymysql，参数绑定 + 标识符白名单） | 代码就绪，未连真实实例；分区存在性走 SHOW PARTITIONS 匹配分区名，可显式设置 partition_name | 环境变量，只读身份 |
 | MaxCompute 分区元数据（PyODPS 表 API） | 代码就绪，真机待验 | 同上 |
 | DataWorks 血缘 | 可选，仅 https 公网（拒绝环回/内网/保留地址） | 环境变量 |

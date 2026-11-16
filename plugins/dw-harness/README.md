@@ -1,10 +1,8 @@
 # dw-harness plugin
 
-Install-time options (userConfig):
-- `python`: single executable path used by hook scripts (default `python`;
-  on Windows prefer an absolute python.exe path — the exec form takes ONE
-  command plus fixed args)
-- `dialect`: default SQL dialect (odps / hive / spark / starrocks)
+Hooks resolve Python 3.9+ as `python` on PATH. Activate the intended Python
+environment before launching Claude Code. The copy template also accepts a
+custom interpreter via `dw init --python`.
 
 Hooks: PreToolUse guards (fail-closed: onFailure block + in-script deny
 fallback), PostToolUse SQL write-after feedback, SessionStart state card,
@@ -21,5 +19,4 @@ use `dw init --mcp`).
 
 Project-side files (AGENTS.md, rules, harness.json, contracts) are generated
 by the `dw-bootstrap` skill / `dw init` — they are intentionally NOT shipped
-by the plugin. Requires Claude Code >= 2.1.295 (userConfig options + hook
-onFailure).
+by the plugin. Requires Claude Code >= 2.1.295 for hook onFailure.

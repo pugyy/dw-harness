@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from _bootstrap import emit_pretool_decision, project_root, read_payload, selftest
 
@@ -23,7 +24,8 @@ def main() -> int:
         from dw_core.guard import GuardEngine
         config = HarnessConfig.load(root=project_root())
         engine = GuardEngine(config)
-        decision = engine.evaluate_command(command)  # logs internally
+        cwd = Path(payload["cwd"]) if payload.get("cwd") else Path.cwd()
+        decision = engine.evaluate_command(command, cwd=cwd)
         if decision.decision == "deny":
             emit_pretool_decision("deny", decision.reasons or ["denied by dw-harness policy"])
             return 0

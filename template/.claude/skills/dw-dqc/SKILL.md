@@ -2,7 +2,7 @@
 name: dw-dqc
 description: >
   Step 8/8 SLA/DQC：从表契约生成稳定 ID 的 DQC 规则配置并校验漂移。
- 适用于任务上线前的质量规则配置。
+  适用于任务上线前的质量规则配置。
 argument-hint: "[表名]"
 allowed-tools: Read, Write, Bash(dw dqc:*), Bash(dw contract:*)
 ---

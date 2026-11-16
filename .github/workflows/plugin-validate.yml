@@ -31,28 +31,16 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Load plugin from local dir (headless, must succeed)
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          claude --version
-          claude -p "reply with the word ok" --plugin-dir ./plugins/dw-harness
-
-      - name: Marketplace add + manifest validation (must succeed)
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - name: Validate plugin and Marketplace manifests
         run: |
           claude plugin marketplace add .
+          claude plugin validate .
           claude plugin validate ./plugins/dw-harness
 
-      - name: Trigger write-after feedback (headless wiring check)
+      - name: Assert real startup, lint feedback and Bash guard
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          claude -p "write the file bad_star.sql with exactly: SELECT t.* FROM db.t; then stop" \
-            --plugin-dir ./plugins/dw-harness
-          # the PostToolUse hook must have flagged no-select-star in the transcript;
-          # manual verification step documented in docs/e2e-demo.md
+        run: python scripts/check_plugin_live.py ./plugins/dw-harness --with-model
 
       - name: Plugin eval (account-scoped, informational)
         env:

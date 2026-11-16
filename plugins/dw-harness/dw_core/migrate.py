@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shlex
 import shutil
 from dataclasses import dataclass, field
@@ -119,7 +120,8 @@ def _write_managed(root: Path, index: Dict[str, str]) -> None:
 
 
 def merge_settings(target: Path, python: str, dry_run: bool,
-                   report: MigrationReport, statusline: bool = False) -> None:
+                   report: MigrationReport, statusline: bool = False,
+                   mode: str = "template") -> None:
     settings_path = target / ".claude" / "settings.json"
     settings: Dict = {}
     if settings_path.is_file():
@@ -129,7 +131,17 @@ def merge_settings(target: Path, python: str, dry_run: bool,
             report.conflicts.append(f"{settings_path}: not valid JSON; left untouched, "
                                     f"merge hooks manually")
             return
-    hooks = settings.get("hooks") or {}
+    if not isinstance(settings, dict) or not isinstance(settings.get("hooks", {}), dict):
+        report.conflicts.append("settings.json: invalid settings structure")
+        return
+    hooks = settings.get("hooks", {})
+    original = json.dumps(settings, sort_keys=True)
+    wiring = {event: [_v2_hook_block(block, python) for block in blocks]
+              for event, blocks in V2_TEMPLATE_HOOKS.items()}
+    owned = {(event, block.get("matcher"), block["hooks"][0]["args"][-1]): block["hooks"][0]
+             for event, blocks in wiring.items() for block in blocks}
+    legacy_scripts = {command.split()[-1] for command in V1_HOOK_COMMANDS}
+    legacy = re.compile(r"^(?:python(?:3|\.exe)?|py(?:\.exe)?(?:\s+-3)?)\s+[\"']?([^'\"\s]+)[\"']?$", re.I)
     # drop v1 entries, remember which v2 scripts are already wired (by script
     # identity, NOT by matcher: a user hook on the same matcher must never
     # silently suppress our guards)
@@ -137,27 +149,34 @@ def merge_settings(target: Path, python: str, dry_run: bool,
     for event, entries in list(hooks.items()):
         kept = []
         for entry in entries:
-            entry_cmds = [h.get("command", "") for h in entry.get("hooks", [])]
-            joined = "|".join(entry_cmds)
-            if any(v1 in joined for v1 in V1_HOOK_COMMANDS):
-                report.removed_v1_hooks.append(f"{event}: {joined[:80]}")
-                continue
+            handlers = []
             for hook in entry.get("hooks", []):
-                for arg in hook.get("args", []) or []:
-                    name = Path(str(arg)).name
-                    if str(arg).endswith(".py") and "/" in str(arg):
-                        wired_scripts.add(name)
-            kept.append(entry)
+                command = hook.get("command", "")
+                match = legacy.fullmatch(command)
+                if (hook.get("type") == "command" and match
+                        and match[1].replace(chr(92), "/") in legacy_scripts):
+                    report.removed_v1_hooks.append(f"{event}: {command}")
+                    continue
+                args = hook.get("args") or []
+                key = (event, entry.get("matcher"), args[-1] if args else None)
+                if hook.get("type") == "command" and key in owned:
+                    if key not in wired_scripts and mode == "template":
+                        handlers.append(owned[key])
+                        wired_scripts.add(key)
+                    continue
+                handlers.append(hook)
+            if handlers:
+                kept.append({**entry, "hooks": handlers})
         if kept:
             hooks[event] = kept
         else:
             hooks.pop(event, None)
-    for event, blocks in V2_TEMPLATE_HOOKS.items():
-        existing = hooks.setdefault(event, [])
-        for block in blocks:
-            if block["script"] in wired_scripts:
-                continue  # idempotent: our own hook already present
-            existing.append(_v2_hook_block(block, python))
+    if mode == "template":
+        for event, entries in wiring.items():
+            for entry in entries:
+                key = (event, entry.get("matcher"), entry["hooks"][0]["args"][-1])
+                if key not in wired_scripts:
+                    hooks.setdefault(event, []).append(entry)
     settings["hooks"] = hooks
     if statusline and "statusLine" not in settings:
         exe, extra = _split_python(python)
@@ -169,6 +188,8 @@ def merge_settings(target: Path, python: str, dry_run: bool,
         command = " ".join([f'"{exe[0]}"', *extra, f'"{script}"'])
         settings["statusLine"] = {"type": "command", "command": command, "padding": 0}
         report.actions.append("settings.json: dw statusLine added (user statusLine absent)")
+    if json.dumps(settings, sort_keys=True) == original:
+        return
     if not dry_run:
         if settings_path.is_file():
             shutil.copy2(settings_path, settings_path.with_name(
@@ -194,12 +215,12 @@ def install_tree(target: Path, source_dir: Path, managed_rel: List[Tuple[str, st
         dst = target / rel_dst
         if not src.is_file():
             continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
         new_hash = _sha(src)
         if dst.is_file():
             current = _sha(dst)
             if current == new_hash:
-                continue  # already current
+                index[rel_dst] = new_hash
+                continue
             known = index.get(rel_dst)
             v1_known = v1_hashes.get(rel_dst)
             if known == current or v1_known == current:
@@ -209,13 +230,15 @@ def install_tree(target: Path, source_dir: Path, managed_rel: List[Tuple[str, st
             else:
                 report.conflicts.append(f"{rel_dst}: locally modified; kept yours "
                                         f"(new version available in scaffold)")
+                continue
         else:
             if not dry_run:
+                dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dst)
             report.actions.append(f"installed {rel_dst}")
         if not dry_run:
             index[rel_dst] = new_hash
-    if not dry_run:
+    if not dry_run and index != _managed_index(target):
         _write_managed(target, index)
 
 
@@ -234,21 +257,29 @@ def merge_claude_md(target: Path, source_dir: Path, dry_run: bool,
         report.actions.append("CLAUDE.md: appended @AGENTS.md reference (backup kept)")
     else:
         if not dry_run:
+            dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
         report.actions.append("CLAUDE.md: installed")
 
 
 def run_init(target: Path, template_root: Path, python: str, dialect: str,
              dry_run: bool = False, v1_hashes: Optional[Dict[str, str]] = None,
-             mcp: bool = False, statusline: bool = False) -> MigrationReport:
+             mcp: bool = False, statusline: bool = False,
+             mode: str = "template") -> MigrationReport:
     """Merge-install the copy-template form into *target*.
 
     *template_root* is the generated ``template/`` directory: CLAUDE.md /
     AGENTS.md at its root, machinery under ``.claude/``.
     """
     report = MigrationReport()
-    v1_hashes = v1_hashes or {}
-    merge_settings(target, python, dry_run, report, statusline=statusline)
+    if v1_hashes is None:
+        index = template_root / ".claude/dw/v1_hashes.json"
+        v1_hashes = json.loads(index.read_text(encoding="utf-8-sig")) if index.is_file() else {}
+    if mcp and not (template_root / ".claude/dw/mcp/server.py").is_file():
+        report.conflicts.append("MCP server missing from the installation package")
+        return report
+    if not dry_run:
+        target.mkdir(parents=True, exist_ok=True)
     merge_claude_md(target, template_root, dry_run, report)
     tree: List[Tuple[str, str]] = [
         ("AGENTS.md", "AGENTS.md"),
@@ -263,7 +294,20 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
         (".claude/rules/sr.md", ".claude/rules/sr.md"),
     ]
     machinery: List[Tuple[str, str]] = []
-    for group in ("hooks", "dw_core", "skills", "agents", "output-styles"):
+    groups = ["hooks", "dw_core", "skills", "agents", "output-styles"] if mode == "template" else []
+    if mcp and "dw_core" not in groups:
+        groups.append("dw_core")
+    if mcp:
+        rel = ".claude/dw/mcp/server.py"
+        machinery.append((rel, rel))
+    if statusline and mode == "plugin":
+        rel = ".claude/hooks/statusline.py"
+        machinery.append((rel, rel))
+        rel = ".claude/hooks/_bootstrap.py"
+        machinery.append((rel, rel))
+        if "dw_core" not in groups:
+            groups.append("dw_core")
+    for group in groups:
         base = template_root / ".claude" / group
         if base.is_dir():
             for item in sorted(base.rglob("*")):
@@ -274,11 +318,13 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
     machinery = [(s, d) for s, d in machinery if not d.endswith("hooks/hooks.json")]
     install_tree(target, template_root, tree + scaffold_files + machinery,
                  dry_run, report, v1_hashes)
+    merge_settings(target, python, dry_run, report, statusline=statusline, mode=mode)
     if mcp:
         mcp_path = target / ".mcp.json"
+        exe, flags = _split_python(python)
         entry = {"mcpServers": {"dw-harness": {
-            "command": python,
-            "args": [str((target / ".claude" / "dw" / "mcp" / "server.py"))],
+            "command": exe[0],
+            "args": [*flags, str(target / ".claude" / "dw" / "mcp" / "server.py")],
             "env": {}}}}
         if mcp_path.is_file():
             try:
@@ -297,17 +343,13 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
                 mcp_path.write_text(json.dumps(entry, indent=2, ensure_ascii=False) + "\n",
                                     encoding="utf-8")
             report.actions.append(".mcp.json: created with dw-harness server entry")
-        if not dry_run:
-            server_src = scaffold_dir / "mcp" / "server.py"
-            if server_src.is_file():
-                dst = target / ".claude" / "dw" / "mcp" / "server.py"
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(server_src, dst)
     if dialect and not dry_run:
         cfg_path = target / ".claude" / "dw" / "harness.json"
         try:
             cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
-            cfg.setdefault("dialect", {})["default"] = dialect
+            if cfg.setdefault("dialect", {}).get("default") == dialect:
+                return report
+            cfg["dialect"]["default"] = dialect
             cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
                                 encoding="utf-8")
             # dw init itself edited the file: refresh the managed hash so the

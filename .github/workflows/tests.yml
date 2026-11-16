@@ -42,3 +42,9 @@ jobs:
 
       - name: Doctor smoke (repo checkout resolves to plugin mode; must pass)
         run: dw doctor
+
+      - name: Exercise clean wheel installation
+        shell: bash
+        run: |
+          python -m pip wheel --no-deps . -w dist
+          python scripts/check_wheel_install.py dist/dw_harness-*-py3-none-any.whl

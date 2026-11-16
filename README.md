@@ -37,7 +37,7 @@ python scripts/run_demo.py        # 无凭据、无数据库、无 Claude Code �
 
 装完在项目里跑 `/dw-harness:dw-bootstrap` 生成项目侧文件（AGENTS.md / rules /
 harness.json / contracts）。需要 Claude Code ≥ 2.1.295
-（userConfig options + hook `onFailure` fail-closed）。
+（Hook 启动失败时可阻断）。插件使用 PATH 上的 Python 3.9+ `python`，复制模板可用 `dw init --python` 指定解释器。
 
 ### 2. 本地加载插件（开发/试用）
 
@@ -77,7 +77,7 @@ plugins/dw-harness/           # 生成物：插件安装单元
 template/                     # 生成物：复制式安装
 contracts/schema/             # 表契约 JSON Schema（ODCS 精简）
 examples/demo/                # 订单表端到端 fixtures + 反例 a-f
-tests/                        # 114 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
+tests/                        # 120 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
 ```
 
 ## 六层防线（v1 五层升级）
@@ -97,7 +97,7 @@ tests/                        # 114 个测试：规则/守卫/契约/对账/证�
 ## CLI 速查
 
 ```bash
-dw init --target . --python python [--dialect odps] [--dry-run] [--mcp]
+dw init --target . --python python [--mode plugin] [--dialect odps] [--dry-run] [--mcp]
 dw doctor [--json]                                  # 配置存在/脚本可跑/真机接线 三级自检
 dw lint <files> [--dialect X] [--json] [--strict]   # 规则：engine vs policy 分开标注
 dw contract validate|compile|diff|decide ...        # 契约四件套（diff 需 --baseline）
@@ -107,7 +107,7 @@ dw dqc gen --contract c.json | dw dqc check ...     # 稳定 ID 规则生成/防
 dw impact --table db.t [--dataworks]                # 仓库 SQL 血缘 + 可选 DataWorks
 dw reconcile --spec spec.json [--save-evidence]     # 键级对账（文件/MaxCompute/StarRocks）
 dw evidence keygen                             # 生成 DW_HARNESS_EVIDENCE_KEY（strict 信任边界）
-dw check --table t [--env dev] [--mode strict|local] # 四态验收报告（JSON + PR Markdown）
+dw check --table t --env offline --partition 20261115 # 四态验收报告（JSON + PR Markdown）
 dw next                                              # 从交付物推断八步进度
 dw lint --changed / dw check --changed                # git 变更集批量模式
 dw demo                                              # 离线端到端验收

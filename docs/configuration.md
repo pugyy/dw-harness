@@ -89,3 +89,16 @@ dw contract decide contracts/contract.json --baseline baselines/v1.json \
 | `DW_HARNESS_SR_HOST/_PORT/_USER/_PASSWORD/_DATABASE` | StarRocks 只读对账身份 |
 | `DW_HARNESS_DW_ENDPOINT/_TOKEN/_PROJECT` | DataWorks 血缘适配器（仅 https 公网） |
 | `DW_HARNESS_EVIDENCE_KEY` | 证据 HMAC 签名密钥（可选，仅环境变量） |
+
+### 对账证据范围
+
+`dw reconcile --save-evidence` 要求 spec 中的 `table` 和 `right.partition`。
+CSV 作为右侧时，验收使用 `dw check --env offline --partition <分区>`。
+数据库作为右侧时，`right.table` 必须与目标表一致，`right.environment` 对应
+实际连接环境。CI 为各环境提供正确的只读连接与签名密钥。
+StarRocks 在使用自定义物理分区名时，可在 spec 指定 `partition_name`。
+
+CSV 相对路径以 spec 所在目录为准。使用 Git 基线时，在 `dw reconcile`
+和 `dw check` 中均传入 `--baseline git:<rev>:<path>`。
+`dw check --changed --base-ref <rev>` 对所有变化的表应用该 Git 基线。
+旧版 dw-evidence/1 证据需要重新生成，签名绑定的结果不会跨环境、分区、文件内容和策略复用。

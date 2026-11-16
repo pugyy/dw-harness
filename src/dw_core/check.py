@@ -7,6 +7,7 @@ unverified items but never rewrites their status.
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,12 +15,13 @@ from typing import Dict, List, Optional
 
 from . import __version__
 from .config import HarnessConfig
-from .contracts import (compile_contract, crosscheck_ddl, diff_contracts,
-                        load_contract, load_decisions, normalize,
+from .contracts import (ContractError, crosscheck_ddl, diff_contracts, read_baseline,
+                        load_contract, load_decisions,
                         unapproved_breaking)
 from .ddl import parse_create_table
-from .dqc import check_rules, gen_rules
-from .evidence import file_digest, load_evidence, text_digest, verify_evidence
+from .dqc import check_rules
+from .evidence import (evidence_policy, file_digest, load_evidence, path_binding,
+                       verify_evidence)
 from .rules import lint_sql
 
 STATUS_ORDER = {"fail": 0, "unverified": 1, "pass": 2, "not_applicable": 3}
@@ -101,29 +103,37 @@ def _item(name: str, status: str, reason: str = "", evidence: str = "") -> Check
 def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
                partition: str = "", sql_files: Optional[List[Path]] = None,
                contract_path: Optional[Path] = None, ddl_path: Optional[Path] = None,
-               dqc_path: Optional[Path] = None, baseline: Optional[Path] = None,
+               dqc_path: Optional[Path] = None, baseline: Optional[str] = None,
                reconcile_spec: Optional[Path] = None,
                mode: str = "strict") -> CheckReport:
     report = CheckReport(table=table, environment=environment,
                          partition=partition, mode=mode)
     root = config.root
-    inputs: Dict[str, str] = {}
+    inputs: Dict[str, str] = {"policy": evidence_policy(config), "contract-baseline": "none"}
 
     # ---- lint changed SQL ------------------------------------------------
     sql_files = sql_files or []
     if sql_files:
         errors = 0
         details: List[str] = []
+        unreadable = []
         for path in sql_files:
-            inputs[f"sql:{path.name}"] = file_digest(path)
+            try:
+                inputs[f"sql:{path_binding(path, root)}"] = file_digest(path)
+                sql = path.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeError):
+                unreadable.append(str(path))
+                continue
             dialect = config.resolve_dialect(str(path))
-            result = lint_sql(path.read_text(encoding="utf-8-sig", errors="replace"), dialect, config)
+            result = lint_sql(sql, dialect, config)
             for issue in result.errors:
                 errors += 1
                 details.append(f"{path.name}:{issue.line} {issue.rule}")
         if errors:
             report.items.append(_item("lint-sql", "fail",
                                       f"{errors} error(s): {'; '.join(details[:5])}"))
+        elif unreadable:
+            report.items.append(_item("lint-sql", "unverified", "cannot read: " + ", ".join(unreadable)))
         else:
             report.items.append(_item("lint-sql", "pass",
                                       f"{len(sql_files)} file(s) clean (offline rules)"))
@@ -132,8 +142,9 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
                                   "no SQL files in this changeset"))
 
     # ---- contract ---------------------------------------------------------
-    contract_path = contract_path or _find_unique(root, ["contract.json", "contract.yaml",
-                                                         f"contracts/{table}.json", f"contracts/{table}.yaml"])
+    contract_path = contract_path or _find_unique(root, [
+        f"contracts/{table}.json", f"contracts/{table}.yaml", f"contracts/{table}.yml",
+        "contract.json", "contract.yaml", "contract.yml"])
     contract = None
     if contract_path is None:
         report.items.append(_item("contract-validate", "unverified",
@@ -149,6 +160,8 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
         if contract is not None:
             from .contracts import validate_contract
             problems = validate_contract(contract)
+            if contract.get("table", "").lower() != table.lower():
+                problems.append(f"contract table {contract.get('table')!r} does not match {table}")
             report.items.append(
                 _item("contract-validate", "fail" if problems else "pass",
                       "; ".join(problems) if problems else "schema valid",
@@ -156,17 +169,19 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
             # DDL cross-check (provable attributes only)
             ddl_path = ddl_path or _find_unique(root, [f"ddl_{table.split('.')[-1]}.sql",
                                                        f"**/ddl_{table.split('.')[-1]}.sql"])
-            if ddl_path is None:
+            if ddl_path is None or not ddl_path.is_file():
                 report.items.append(_item("ddl-vs-contract", "unverified",
                                           "no DDL found in changeset"))
             else:
                 tables = parse_create_table(ddl_path.read_text(encoding="utf-8-sig", errors="replace"),
                                             config.resolve_dialect(str(ddl_path)))
-                if not tables:
+                names = {table.lower(), table.rsplit(".", 1)[-1].lower()}
+                tables = [ddl for ddl in tables if ddl.table.lower() in names]
+                if len(tables) != 1:
                     report.items.append(_item("ddl-vs-contract", "unverified",
-                                              "DDL file has no parseable CREATE TABLE"))
+                                              "DDL file has no unique CREATE TABLE for the requested table"))
                 else:
-                    inputs[f"ddl:{ddl_path.name}"] = file_digest(ddl_path)
+                    inputs[f"ddl:{path_binding(ddl_path, root)}"] = file_digest(ddl_path)
                     findings = crosscheck_ddl(contract, tables[0])
                     hard = [f for f in findings if f["finding"] != "missing_in_contract"]
                     report.items.append(_item(
@@ -175,13 +190,15 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
                         else "provable attributes consistent; business semantics confirmed in review",
                         evidence=str(ddl_path)))
             # contract diff vs baseline + migration decisions
-            if baseline is not None and baseline.is_file():
+            if baseline is not None:
                 try:
-                    base_raw, _ = load_contract(baseline)
+                    base_raw, baseline_digest = read_baseline(baseline, root)
+                    if base_raw.get("table") != contract.get("table"):
+                        raise ValueError("baseline contract belongs to a different table")
                     changes = diff_contracts(contract, base_raw)
                     pending = unapproved_breaking(changes, contract, base_raw,
                                                   load_decisions(root, contract.get("contract_id", "")))
-                    inputs["contract-baseline"] = file_digest(baseline)
+                    inputs["contract-baseline"] = baseline_digest
                     if pending:
                         report.items.append(_item(
                             "contract-diff", "fail",
@@ -192,12 +209,13 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
                         report.items.append(_item("contract-diff", "pass",
                                                   "no unapproved breaking changes vs baseline",
                                                   evidence=str(baseline)))
-                except Exception as exc:  # noqa: BLE001
+                except (OSError, ValueError, subprocess.SubprocessError, ContractError, TypeError, AttributeError) as exc:
+                    inputs["contract-baseline"] = "unreadable"
                     report.items.append(_item("contract-diff", "unverified",
                                               f"baseline unreadable: {exc}"))
             else:
                 report.items.append(_item("contract-diff", "not_applicable",
-                                          "no baseline provided; first version of contract"))
+                                          "no baseline requested for this check"))
 
     # ---- DQC ---------------------------------------------------------------
     dqc_path = dqc_path or _find_unique(root, [f"dqc_{table.split('.')[-1]}.json"])
@@ -218,44 +236,36 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
         except (json.JSONDecodeError, OSError) as exc:
             report.items.append(_item("dqc-config", "unverified", f"dqc config unreadable: {exc}"))
 
-    # ---- reconcile evidence -------------------------------------------------
+    # Establish trust before following any paths carried inside a report.
+    from .reconcile import ReconcileError, ReconcileSpec
     ev = load_evidence(root, f"reconcile-{table}")
-    binding_paths = (ev or {}).get("binding_paths") or {}
-    spec_path = reconcile_spec
-    if spec_path is None and binding_paths.get("reconcile:spec"):
-        candidate = Path(binding_paths["reconcile:spec"])
-        candidate = candidate if candidate.is_absolute() else root / candidate
-        if candidate.is_file():
-            spec_path = candidate
-    if spec_path is None:
-        candidates = sorted(root.glob("reconcile_*.json"))
-        spec_path = candidates[0] if len(candidates) == 1 else None
-    # verification set = (roles this check cares about) UNION (roles the
-    # evidence bound). Roles present in the check but NOT covered by the
-    # evidence make it stale — partial bindings cannot pass (audit R1).
-    current = {k: v for k, v in inputs.items()
-               if k == "contract" or k.startswith(("sql:", "ddl:"))}
-    for role, raw_path in binding_paths.items():
-        if role == "reconcile:spec":
-            continue  # handled below with the normalized basis
-        p = Path(raw_path)
-        if not p.is_absolute():
-            p = root / p
-        current[role] = file_digest(p) if p.is_file() else f"missing:{raw_path}"
-    if spec_path is not None and spec_path.is_file():
-        # same normalized basis the CLI producer records (defaults filled in)
-        from .reconcile import ReconcileSpec
+    ttl = int(config.data.get("evidence", {}).get("freshness_hours", 72))
+    fresh = verify_evidence(ev, {}, freshness_hours=ttl, strict=(mode == "strict"))
+    if fresh["state"] == "valid":
         try:
-            spec_raw = json.loads(spec_path.read_text(encoding="utf-8-sig"))
-            spec_keys = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
-            spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
-            current["reconcile:spec"] = text_digest(json.dumps(spec.to_dict(), sort_keys=True))
-        except (json.JSONDecodeError, TypeError, KeyError):
-            current["reconcile:spec"] = text_digest(spec_path.read_text(encoding="utf-8-sig"))
-    fresh = verify_evidence(ev, current,
-                            freshness_hours=int(config.data.get("evidence", {}).get(
-                                "freshness_hours", 72)),
-                            strict=(mode == "strict"))
+            names = [f"reconcile_{table}.json", f"reconcile_{table.rsplit('.', 1)[-1]}.json"]
+            spec_path = reconcile_spec or _find_unique(root, names)
+            if spec_path is None:
+                raise ValueError("no reconciliation spec selected; pass --reconcile-spec")
+            raw, spec = ReconcileSpec.load(spec_path)
+            requested = {"table": table, "environment": environment, "partition": partition}
+            scope = spec.evidence_scope(raw.get("table"))
+            if scope != requested or ev.get("scope") != requested:
+                raise ValueError("evidence scope does not match target table, environment and partition")
+            inputs["reconcile:spec"] = file_digest(spec_path)
+            for role, path in spec.file_inputs().items():
+                inputs[role] = file_digest(path)
+            current = {key: value for key, value in inputs.items()
+                       if not key.startswith("dqc:")}
+            for role, raw_path in (ev.get("binding_paths") or {}).items():
+                if role.startswith(("sql:", "ddl:")) and role not in current:
+                    path = root / Path(raw_path)
+                    if path_binding(path, root) != role.partition(":")[2]:
+                        raise ValueError(f"evidence file binding does not match role {role}")
+                    current[role] = file_digest(path)
+            fresh = verify_evidence(ev, current, freshness_hours=ttl, strict=(mode == "strict"))
+        except (OSError, TypeError, ValueError, AttributeError, KeyError, ReconcileError) as exc:
+            fresh = {"state": "stale", "reason": str(exc)}
     if ev is None:
         report.items.append(_item("reconcile", "unverified",
                                   "no reconciliation evidence for this table/partition"))
@@ -266,16 +276,18 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
     elif fresh["state"] != "valid":
         report.items.append(_item("reconcile", "unverified",
                                   f"evidence stale: {fresh['reason']}; re-run `dw reconcile`"))
-    elif (ev.get("result_summary") or {}).get("status") == "pass":
+    elif ev.get("result_summary", {}).get("status") == "pass":
         report.items.append(_item("reconcile", "pass",
                                   "key-level comparison within tolerance "
                                   f"(producer={ev.get('producer', 'unknown')})",
                                   evidence=f".claude/dw/evidence/reconcile-{table}.json"))
-    else:
+    elif ev.get("result_summary", {}).get("status") == "fail":
         report.items.append(_item("reconcile", "fail",
                                   "recorded reconciliation did not pass",
                                   evidence=f".claude/dw/evidence/reconcile-{table}.json"))
 
+    else:
+        report.items.append(_item("reconcile", "unverified", "invalid evidence result state"))
     return report
 
 
@@ -286,5 +298,5 @@ def _find_unique(root: Path, patterns: List[str]) -> Optional[Path]:
         if len(matches) == 1:
             return matches[0]
         if matches:
-            return matches[0]
+            return None  # ambiguous results require an explicit path
     return None

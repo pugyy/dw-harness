@@ -18,6 +18,8 @@ dw mcp --selftest                 # 可验证：子进程握手 initialize + too
   "args": [".claude/dw/mcp/server.py"], "env": {}}}}
 ```
 
+插件用户可用 `dw init --mode plugin --mcp`，由插件提供 Hook，项目安装 MCP 服务。
+
 插件形态下 server 位于 `${CLAUDE_PLUGIN_ROOT}/mcp/server.py`。
 
 ## 工具清单

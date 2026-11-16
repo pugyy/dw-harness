@@ -31,10 +31,10 @@ EOF
 dw reconcile --spec recon.json --save-evidence \
   --contract contracts/contract.json \
   --sql insert_[表].sql --ddl ddl_[表].sql
-dw check --table db_a.dws_trade_order_di \
+dw check --table db_a.dws_trade_order_di --env offline --partition 20261115 \
   --sql insert_[表].sql --contract contracts/contract.json \
   --ddl ddl_[表].sql --reconcile-spec recon.json \
-  --out-md .claude/dw/check_report.md
+  --out-md .claude/dw/check_report.md --out-json .claude/dw/check_report.json
 ```
 
 > strict 模式的证据信任边界（防伪造）：生产与校验需持有同一个
@@ -63,7 +63,7 @@ claude --plugin-dir /path/to/dw-harness/plugins/dw-harness
 
 逐项验证并记录版本与输出：
 
-1. `claude --version`；插件列表出现 dw-harness（userConfig 弹窗填 python）
+1. 确认 PATH 上的 `python` 为 3.9+，运行 `python scripts/check_plugin_live.py ./plugins/dw-harness` 验证实际启动。
 2. **写后反馈**：让 Claude 写 `bad_star.sql`（内容 `SELECT t.* FROM db.t`）→
    预期 PostToolUse 反馈 no-select-star 并自动修正
 3. **拒绝**：让 Claude 跑 `odpscmd -e 'DROP TABLE db.t'` → 预期 PreToolUse deny

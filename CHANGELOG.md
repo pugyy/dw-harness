@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.0.0 release audit fixes
+
+- Reconciliation evidence v2 binds table, environment, partition, effective
+  policy, baseline and CSV contents. Re-run reconciliation to replace v1
+  evidence; CSV target evidence is scoped to `offline`.
+- Real Bash/PowerShell hook runs use the tool working directory and production
+  marker. Quoted client paths, compound invocations and `--file=...` are checked.
+- Changed-table checks include Git baselines and YAML contracts. A missing CSV
+  metric cannot count as matching NULLs.
+- Clean wheel installation bundles the template. The MCP smoke test executes
+  the installed registration and restricts reads to project artifacts.
+- Claude Code manifest validation, startup and authenticated hook checks are
+  separate release checks.
+
 ## 2.0.0 (2026-11-16, rev2) — 大版本重构：可安装、可配置、可验证
 
 ### rc.1 审计修正（rev2）
@@ -115,7 +129,7 @@ docs/upgrade-from-v1.md。
 - AGENTS.md 承载跨工具共享规范，CLAUDE.md 显式 `@AGENTS.md` 引用
 
 ### 测试 / CI / 文档
-- 114 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
+- 120 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
   manifest、构建漂移、迁移幂等、MCP 握手、离线端到端
 - CI：ubuntu/windows/macos × Python 3.9/3.13 + CLI 安装 + build --check + demo；
   插件真机验证独立 workflow（需受信环境，缺 claude CLI 时优雅跳过）

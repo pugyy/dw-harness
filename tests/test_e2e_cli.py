@@ -60,13 +60,15 @@ class CliEvidenceChainTests(unittest.TestCase):
             "PARTITIONED BY (partition_dt STRING)\n"
             "COMMENT 'orders'\n"
             "LIFECYCLE 365;\n", encoding="utf-8")
+        csv_path = root / "orders.csv"
+        shutil_copy(REPO / "examples" / "demo" / "csv" / "old.csv", csv_path)
         spec = {
             "table": "db_a.dws_trade_order_di",
             "left": {"adapter": "file",
-                     "path": str(REPO / "examples" / "demo" / "csv" / "old.csv"),
+                     "path": str(csv_path),
                      "partition": "20261115"},
             "right": {"adapter": "file",
-                      "path": str(REPO / "examples" / "demo" / "csv" / "old.csv"),
+                      "path": str(csv_path),
                       "partition": "20261115"},
             "keys": ["order_no"],
             "metrics": [{"column": "net_amount", "abs_tol": "0", "rel_tol": "0",
@@ -98,7 +100,7 @@ class CliEvidenceChainTests(unittest.TestCase):
             from dw_core.config import HarnessConfig
             config = HarnessConfig.load(root=root)
             report = run_checks(
-                config, "db_a.dws_trade_order_di", sql_files=[
+                config, "db_a.dws_trade_order_di", "offline", "20261115", sql_files=[
                     root / "insert_dws_trade_order_di.sql"],
                 contract_path=root / "contracts" / "contract.json",
                 ddl_path=root / "ddl_dws_trade_order_di.sql",
@@ -114,13 +116,48 @@ class CliEvidenceChainTests(unittest.TestCase):
                 "-- touched\n" + (root / "insert_dws_trade_order_di.sql")
                 .read_text(encoding="utf-8"), encoding="utf-8")
             report2 = run_checks(
-                config, "db_a.dws_trade_order_di", sql_files=[
+                config, "db_a.dws_trade_order_di", "offline", "20261115", sql_files=[
                     root / "insert_dws_trade_order_di.sql"],
                 contract_path=root / "contracts" / "contract.json",
                 reconcile_spec=spec_path, mode="strict")
             item2 = next(i for i in report2.items if i.name == "reconcile")
             self.assertEqual(item2.status, "unverified")
             self.assertIn("changed", item2.reason)
+
+    def test_cli_rejects_replayed_scope_and_mutated_source_data(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec = self._project(root)
+            contract = "contracts/contract.json"
+            sql = "insert_dws_trade_order_di.sql"
+            ddl = "ddl_dws_trade_order_di.sql"
+            result = run_cli(["reconcile", "--spec", str(spec), "--save-evidence",
+                              "--contract", contract, "--sql", sql, "--ddl", ddl], root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(run_cli(["dqc", "gen", "--contract", contract], root).returncode, 0)
+            cmd = ["check", "--table", "db_a.dws_trade_order_di", "--contract", contract,
+                   "--sql", sql, "--ddl", ddl, "--reconcile-spec", str(spec), "--out-json", "report.json"]
+
+            def check(environment, partition, expected):
+                proc = run_cli([*cmd, "--env", environment, "--partition", partition], root)
+                self.assertEqual(proc.returncode, expected, proc.stdout + proc.stderr)
+                return next(i for i in json.loads((root / "report.json").read_text(encoding="utf-8"))
+                            ["items"] if i["name"] == "reconcile")
+
+            self.assertEqual(check("offline", "20261115", 0)["status"], "pass")
+            for environment, partition in (("prod", "20261115"), ("offline", "20261116")):
+                self.assertIn("scope", check(environment, partition, 2)["reason"])
+            csv = root / "orders.csv"
+            previous_csv = csv.read_text(encoding="utf-8")
+            csv.write_text(previous_csv.replace("1000", "1001"), encoding="utf-8")
+            self.assertIn("file", check("offline", "20261115", 2)["reason"])
+            csv.write_text(previous_csv, encoding="utf-8")
+            config = root / ".claude" / "dw" / "harness.json"
+            data = json.loads(config.read_text(encoding="utf-8"))
+            data["money_fields"] = "tax"
+            config.write_text(json.dumps(data), encoding="utf-8")
+            self.assertIn("policy", check("offline", "20261115", 2)["reason"])
 
     def test_manual_producer_rejected_in_strict_check(self):
         import tempfile
@@ -155,7 +192,7 @@ class CliEvidenceChainTests(unittest.TestCase):
                 .read_text(encoding="utf-8"), encoding="utf-8")
             config = HarnessConfig.load(root=root)
             report = run_checks(
-                config, "db_a.dws_trade_order_di",
+                config, "db_a.dws_trade_order_di", "offline", "20261115",
                 sql_files=[root / "insert_dws_trade_order_di.sql"],
                 contract_path=root / "contracts" / "contract.json",
                 reconcile_spec=spec_path, mode="strict")
@@ -434,7 +471,7 @@ class SkillFrontmatterLint(unittest.TestCase):
 class GitBaselineTests(unittest.TestCase):
     def test_contract_diff_against_git_ref(self):
         import tempfile
-        from dw_core.cli import _resolve_baseline
+        from dw_core.contracts import read_baseline
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             def git(*argv):
@@ -450,11 +487,10 @@ class GitBaselineTests(unittest.TestCase):
             (root / "contract.json").write_text(
                 (REPO / "examples" / "demo" / "contract_changed.json").read_text(encoding="utf-8"),
                 encoding="utf-8")
-            baseline = _resolve_baseline("git:HEAD:contract.json", root)
-            self.assertTrue(baseline.is_file())
+            base, digest = read_baseline("git:HEAD:contract.json", root)
+            self.assertEqual(len(digest), 64)
             from dw_core.contracts import diff_contracts, load_contract
             current, _ = load_contract(root / "contract.json")
-            base, _ = load_contract(baseline)
             changes = diff_contracts(current, base)
             self.assertTrue(any(c["type"] == "unit_changed" for c in changes))
 

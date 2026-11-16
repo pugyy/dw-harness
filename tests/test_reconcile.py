@@ -33,6 +33,19 @@ class ReconcileTests(unittest.TestCase):
         result = reconcile(spec("old.csv", "old.csv"))
         self.assertEqual(result.status, "pass")
 
+    def test_missing_metric_is_not_a_matched_null(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = Path(tmp) / "empty.csv"
+            empty.write_text("order_no,another_metric\n", encoding="utf-8")
+            for csv in (FIX / "old.csv", empty):
+                with self.subTest(csv=csv):
+                    data = {"adapter": "file", "path": str(csv)}
+                    result = reconcile(ReconcileSpec(data, data, ["order_no"],
+                                                     [{"column": "unknown_field"}]))
+                    self.assertEqual(result.status, "unverified")
+                    self.assertIn("missing required CSV columns: unknown_field", result.reasons[0])
+
     def test_swap_caught_key_level(self):
         result = reconcile(spec("new_swap.csv", "old.csv"))
         self.assertEqual(result.status, "fail")

@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import shlex
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -86,7 +85,7 @@ class GuardEngine:
     def __init__(self, config: HarnessConfig, env: Optional[Dict[str, str]] = None,
                  today: Optional[date] = None):
         self.config = config
-        self.env = env if env is not None else {}
+        self.env = env
         self.today = today or date.today()
         self.prod = config.is_prod(self.env)
 
@@ -94,30 +93,43 @@ class GuardEngine:
     # shell commands                                                      #
     # ------------------------------------------------------------------ #
     def evaluate_command(self, command: str, cwd: Optional[Path] = None) -> GuardDecision:
-        client, sql_sources = self._collect_sql(command, cwd)
+        sql_sources = []
+        client = ""
+        # Separate commands without interpreting shell expansions or separators in quotes.
+        for segment in re.findall(r"""(?:[^"';&|\n]|"(?:\\.|[^"\\])*"|'[^']*')+""", command):
+            segment = segment.strip()
+            if not segment:
+                continue
+            change_dir = re.fullmatch(r"(?:cd|set-location)\s+(.+)", segment, re.I)
+            if change_dir:
+                dest = Path(change_dir[1].strip("\"'"))
+                cwd = dest if dest.is_absolute() else (cwd or Path.cwd()) / dest
+                continue
+            name, sources = self._collect_sql(segment, cwd)
+            if name:
+                client = name
+                sql_sources.extend(sources or [(name, None)])
         if not client:
             return self._finish("PreToolUse:Bash", command,
                                 GuardDecision("allow",
                                               reasons=["not a registered database client; SQL guard not applicable"]))
-        unreadable = [origin for origin, sql in sql_sources if sql is None]
-        if not sql_sources:
-            decision = self._unknown_write_policy(
-                f"'{client}' invocation carries no recognizable inline SQL or -f script")
-            return self._finish("PreToolUse:Bash", command, decision)
-        if unreadable:
-            # a -f target we could not read: range undeterminable -> env policy
-            decision = self._unknown_write_policy(
-                f"'{client}' references unreadable script(s) {', '.join(unreadable)}: "
-                f"target and scope cannot be verified")
-            if decision.decision == "allow":
-                decision = GuardDecision("ask", reasons=decision.reasons)
-            return self._finish("PreToolUse:Bash", command, decision)
         reasons: List[str] = []
         exceptions_hit: List[str] = []
         worst = "allow"
         statements_total: List[Dict] = []
         for origin, sql in sql_sources:
-            for st_index, statement in enumerate(scan_sql(sql)[0]):
+            if sql is None:
+                decision = self._unknown_write_policy(
+                    f"'{client}' SQL source {origin} is missing or unreadable")
+                reasons.extend(decision.reasons)
+                worst = _worst(worst, decision.decision)
+                continue
+            statements, problems = scan_sql(sql)
+            if problems:
+                decision = self._unknown_write_policy(f"SQL could not be parsed: {origin}")
+                reasons.extend(decision.reasons)
+                worst = _worst(worst, decision.decision)
+            for st_index, statement in enumerate(statements):
                 info = self._classify(statement.code, statement.text)
                 info["origin"] = origin
                 info["statement_index"] = st_index
@@ -153,7 +165,7 @@ class GuardEngine:
                     worst = _worst(worst, level)
         if not statements_total:
             return self._finish("PreToolUse:Bash", command,
-                                GuardDecision("allow", reasons=["no SQL statements detected in command"]))
+                                GuardDecision(worst, reasons=reasons or ["no SQL statements detected in command"]))
         decision = GuardDecision(worst if worst != "allow" else "allow",
                                  reasons=reasons or ["all statements covered by active policy exceptions"],
                                  exceptions=exceptions_hit,
@@ -171,15 +183,13 @@ class GuardEngine:
                     return token[1:-1]
             return token
 
-        try:  # posix=False keeps Windows backslash paths intact
-            argv = [unquote(t) for t in shlex.split(command, posix=False)]
-        except ValueError:
-            argv = command.split()
+        # Preserve Windows backslashes and quoted values in --file=... .
+        argv = [unquote(t) for t in re.findall(r"""(?:[^\s"\x27]+|"[^"]*"|\x27[^\x27]*\x27)+""", command)]
         if not argv:
             return "", []
         raw_exe = argv[0]
-        exe = Path(raw_exe).name.lower().strip('"')
-        stem = Path(raw_exe).stem.lower().strip('"')
+        exe = raw_exe.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        stem = Path(exe).stem
         # Windows wrappers: odpscmd.exe / beeline.cmd / hive.bat all count
         if exe not in DB_CLIENTS and stem not in DB_CLIENTS:
             return "", []
@@ -187,28 +197,23 @@ class GuardEngine:
         i = 1
         while i < len(argv):
             arg = argv[i]
-            base = arg.lower()
-            if arg in _FILE_ARGS and i + 1 < len(argv):
-                script = Path(argv[i + 1])
-                if not script.is_absolute() and cwd is not None:
-                    script = cwd / script
-                if script.is_file():
+            option, eq, attached = arg.partition("=")
+            if option.lower() in _FILE_ARGS | _EXEC_ARGS:
+                value = unquote(attached) if eq else argv[i + 1] if i + 1 < len(argv) else ""
+                i += 1 if eq or i + 1 == len(argv) else 2
+                if not value:
+                    sources.append((option, None))
+                elif option.lower() in _FILE_ARGS:
+                    script = Path(value)
+                    if not script.is_absolute():
+                        script = (cwd or Path.cwd()) / script
                     try:
-                        sources.append((f"file:{script.name}",
-                                        script.read_text(encoding="utf-8-sig", errors="replace")))
-                    except OSError:
-                        sources.append((f"file:{script.name}", None))  # unreadable
+                        sql = script.read_text(encoding="utf-8-sig")
+                    except (OSError, UnicodeError):
+                        sql = None
+                    sources.append((f"file:{script.name}", sql))
                 else:
-                    sources.append((f"file:{argv[i + 1]}", None))  # missing -> unknown policy
-                i += 2
-                continue
-            if arg in _EXEC_ARGS and i + 1 < len(argv):
-                sources.append(("inline:-e", argv[i + 1]))
-                i += 2
-                continue
-            if base.startswith("--") and "=" in arg and base.split("=", 1)[0].lstrip("-") in {"e", "execute", "query", "file", "sql-file"}:
-                sources.append((f"inline:{arg.split('=', 1)[0]}", arg.split("=", 1)[1]))
-                i += 1
+                    sources.append((f"inline:{option}", value))
                 continue
             if SQL_KEYWORD_HINT.search(arg):
                 sources.append(("inline:arg", arg))
@@ -225,16 +230,29 @@ class GuardEngine:
         if re.search(r"\bdrop\s+(table|database)\b", code, re.I) or re.search(r"\btruncate\s+table\b", code, re.I) \
                 or re.search(r"\balter\s+table\b[\s\S]*?\bdrop\s+(column|partition)\b", code, re.I):
             flags["destructive"] = "destructive DDL detected"
-        elif re.search(r"\bdelete\s+from\b", code, re.I) and not re.search(r"\bwhere\b", code, re.I):
-            flags["destructive"] = "DELETE without WHERE"
+        elif re.match(r"(?:delete\s+from|update\s+)\b", low):
+            depth = 0
+            for token in re.findall(r"\(|\)|\bwhere\b", low):
+                if token == "(":
+                    depth += 1
+                elif token == ")":
+                    depth -= 1
+                elif depth == 0:
+                    break
+            else:
+                flags["destructive"] = f"{low.split()[0].upper()} without a top-level WHERE"
         if re.search(r"\binsert\s+overwrite\b", code, re.I):
             flags["overwrite"] = "INSERT OVERWRITE with confirmed partition scope"
             literal_source = text if text is not None else code
-            part = re.search(r"\bpartition\s*\(([^)]*)\)", literal_source, re.I)
+            head = re.split(r"\b(?:select|values)\b", code, maxsplit=1, flags=re.I)[0]
+            part = re.search(r"\bpartition\s*\(([^)]*)\)", head, re.I)
             if not part:
                 flags["overwrite_without_partition"] = "INSERT OVERWRITE without explicit PARTITION clause"
             else:
-                literal = re.search(r"=\s*'([^']*)'", part.group(1))
+                assignment = literal_source[part.start(1):part.end(1)]
+                literal = re.fullmatch(
+                    rf"\s*`?{re.escape(self.config.partition_column)}`?\s*=\s*'([^']*)'\s*",
+                    assignment, re.I)
                 if not literal:
                     flags["overwrite_without_partition"] = "partition value is not a literal (dynamic/expression)"
                 else:
