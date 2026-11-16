@@ -157,8 +157,10 @@ def run_doctor(root: Path, python: str = sys.executable, hooks_dir: Optional[Pat
                 claude_note = f"claude {version_text} < required {MIN_CLAUDE_CODE}"
     except (OSError, subprocess.SubprocessError):
         claude_note += "; claude CLI not on PATH (checked only when installed)"
+    # a PRESENT but too-old claude breaks fail-closed -> critical;
+    # an absent one simply cannot be judged -> informational
     add("claude-version", True if claude_ok is None else claude_ok, claude_note,
-        critical=False)
+        critical=claude_ok is False)
 
     verified = (root / ".claude" / "dw" / "wiring_verified.json").is_file()
     note = "run the real-app steps in docs/e2e-demo.md, then write " \

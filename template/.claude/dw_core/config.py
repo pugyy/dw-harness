@@ -82,10 +82,15 @@ def find_project_root(start: Optional[Path] = None) -> Path:
 
 
 class HarnessConfig:
-    def __init__(self, data: Dict[str, Any], root: Path, path: Optional[Path]):
+    def __init__(self, data: Dict[str, Any], root: Path, path: Optional[Path],
+                 dialect_dir: Optional[Path] = None):
         self.data = data
         self.root = root
         self.path = path
+        # dialect packs live next to dw_core/ in every layout (src/, plugin,
+        # template) — the pack file is a real config source, not a dead asset
+        self.dialect_dir = dialect_dir or Path(__file__).resolve().parents[1] / "dialects"
+        self._dialect_packs: Dict[str, Dict[str, Any]] = {}
 
     # -- loading ---------------------------------------------------------
     @classmethod
@@ -104,6 +109,20 @@ class HarnessConfig:
     @property
     def exists(self) -> bool:
         return self.path is not None
+
+    # -- dialect packs ----------------------------------------------------
+    def dialect_pack(self, dialect: str) -> Dict[str, Any]:
+        if dialect in self._dialect_packs:
+            return self._dialect_packs[dialect]
+        pack: Dict[str, Any] = {}
+        path = self.dialect_dir / f"{dialect}.json"
+        if path.is_file():
+            try:
+                pack = json.loads(path.read_text(encoding="utf-8-sig"))
+            except (json.JSONDecodeError, OSError):
+                pack = {}
+        self._dialect_packs[dialect] = pack
+        return pack
 
     # -- dialect ---------------------------------------------------------
     def resolve_dialect(
@@ -131,7 +150,9 @@ class HarnessConfig:
     def rule_level(self, rule_id: str, default_level: str, dialect: Optional[str] = None) -> str:
         overrides = dict(self.data.get("rules") or {})
         if dialect:
+            # project config first, then the shipped dialect pack
             overrides.update((self.data.get("dialect_rules") or {}).get(dialect) or {})
+            overrides.update((self.dialect_pack(dialect) or {}).get("rule_levels") or {})
         level = str(overrides.get(rule_id, default_level)).lower()
         return level if level in ("error", "warn", "off") else default_level
 

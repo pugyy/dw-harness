@@ -193,6 +193,17 @@ def run_demo(fixtures: Optional[Path] = None, out_dir: Optional[Path] = None) ->
     _case("(d2) manual/hand-written PASS rejected in strict mode",
           manual_state["state"] == "untrusted", json.dumps(manual_state))
 
+    # ---- (d3) forged producer without an HMAC key is refused ---------------
+    import os as _os
+    had_key = _os.environ.pop("DW_HARNESS_EVIDENCE_KEY", None)
+    forged = dict(ev)
+    forged["producer"] = "dw-reconcile"
+    forged_state = verify_evidence(forged, inputs, strict=True)
+    if had_key:
+        _os.environ["DW_HARNESS_EVIDENCE_KEY"] = had_key
+    _case("(d3) unsigned producer=dw-reconcile refused in strict mode",
+          forged_state["state"] == "untrusted", json.dumps(forged_state))
+
     # ---- (e) guard decisions ---------------------------------------------------
     engine = GuardEngine(config, env={"DW_HARNESS_PROD": "1"})
     prod_overwrite = engine.evaluate_command(

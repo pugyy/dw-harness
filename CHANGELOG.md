@@ -19,6 +19,24 @@
 - DB 适配器 partition_exists 实测 COUNT（参数绑定），空分区与缺分区可区分
 - 清理误提交的 .mimosa/（历史重写移除）
 
+### rc.2 复审修正（rev3）
+
+- R1 证据覆盖并集：校验集 = 本次 check 的 contract/sql/ddl ∪ 证据绑定角色，部分绑定无法隐藏
+  SQL 漂移（负测锁定）；`dw reconcile` 新增 `--ddl` 绑定；spec 路径进 binding_paths（check 免传参反推）
+- R2 信任边界补严：strict 模式且未配置 `DW_HARNESS_EVIDENCE_KEY` 时，拒绝一切「自称」
+  producer 的证据（producer 为普通字段可伪造）；签名/篡改/伪造三测试 + demo d3
+- R3 statusLine 修正为官方 schema（单条 shell `command` 字符串，无 args 字段），
+  脚本输出纯文本行；settings schema 与输出测试锁定
+- R4 文档数字对齐（105 测试 / 20 用例）；e2e 的 reconcile 命令补 `--contract/--sql/--ddl`
+  与 strict/key 说明，文档路径可真跑通
+- R5 plugin-validate workflow 安装 claude CLI + 强制 `CLAUDE_CODE_OAUTH_TOKEN` secret
+  （缺失即红，不再空跑绿）
+- R6 DB 分区存在性改查元数据（StarRocks information_schema/SHOW PARTITIONS；
+  MaxCompute PyODPS 表 API，真机待验）
+- R7 doctor：已安装但低于 2.1.295 的 claude 计为 critical
+- R8 方言包真实加载：`dialects/*.json` 的 `rule_levels` 参与规则分级（不再是死资产）
+- R9 marketplace owner 断言入测试；`dw init --statusline` schema 测试
+
 单源重构 + 插件分发 + 表契约 + 键级对账 + 四态验收。v1 用户的八步流程、
 OneData 背景、MaxCompute → StarRocks 主线全部保留；升级路径见
 docs/upgrade-from-v1.md。
@@ -83,7 +101,7 @@ docs/upgrade-from-v1.md。
 - AGENTS.md 承载跨工具共享规范，CLAUDE.md 显式 `@AGENTS.md` 引用
 
 ### 测试 / CI / 文档
-- 86 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
+- 105 个测试：规则误报矩阵、守卫决策、契约与证据、对账语义、真实 hook 脚本接线、
   manifest、构建漂移、迁移幂等、MCP 握手、离线端到端
 - CI：ubuntu/windows/macos × Python 3.9/3.13 + CLI 安装 + build --check + demo；
   插件真机验证独立 workflow（需受信环境，缺 claude CLI 时优雅跳过）

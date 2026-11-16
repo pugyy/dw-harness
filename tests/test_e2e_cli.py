@@ -29,6 +29,16 @@ def run_cli(args, cwd, env=None):
 class CliEvidenceChainTests(unittest.TestCase):
     """CLI reconcile --save-evidence -> dw check must verify (P0-1/P0-2)."""
 
+    KEY = "test-evidence-key"
+
+    def setUp(self):
+        import os
+        os.environ["DW_HARNESS_EVIDENCE_KEY"] = self.KEY
+
+    def tearDown(self):
+        import os
+        os.environ.pop("DW_HARNESS_EVIDENCE_KEY", None)
+
     def _project(self, root: Path):
         (root / ".claude" / "dw").mkdir(parents=True)
         (root / "contracts").mkdir()
@@ -73,7 +83,8 @@ class CliEvidenceChainTests(unittest.TestCase):
             spec_path = self._project(root)
             proc = run_cli(["reconcile", "--spec", str(spec_path), "--save-evidence",
                             "--contract", str(root / "contracts" / "contract.json"),
-                            "--sql", str(root / "insert_dws_trade_order_di.sql")], root)
+                            "--sql", str(root / "insert_dws_trade_order_di.sql"),
+                            "--ddl", str(root / "ddl_dws_trade_order_di.sql")], root)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             payload = json.loads(proc.stdout)
             self.assertEqual(payload["evidence"], "saved")
@@ -117,13 +128,68 @@ class CliEvidenceChainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             spec_path = self._project(root)
-            run_cli(["reconcile", "--spec", str(spec_path), "--save-evidence"], root)
+            run_cli(["reconcile", "--spec", str(spec_path), "--save-evidence"],
+                    root, env={"DW_HARNESS_EVIDENCE_KEY": self.KEY})
             from dw_core.evidence import load_evidence
             ev = load_evidence(root, "reconcile-db_a.dws_trade_order_di")
             self.assertEqual(ev.get("producer"), "dw-reconcile")
             forged = dict(ev)
             forged["producer"] = "manual"
             state = verify_evidence(forged, {}, strict=True)
+            self.assertEqual(state["state"], "untrusted")
+
+    def test_partial_binding_cannot_hide_sql_drift(self):
+        """R1: evidence bound only to the contract; the SQL drifts -> UNVERIFIED."""
+        import tempfile
+        from dw_core.check import run_checks
+        from dw_core.config import HarnessConfig
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = self._project(root)
+            proc = run_cli(["reconcile", "--spec", str(spec_path), "--save-evidence",
+                            "--contract", str(root / "contracts" / "contract.json")],
+                           root, env={"DW_HARNESS_EVIDENCE_KEY": self.KEY})
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            (root / "insert_dws_trade_order_di.sql").write_text(
+                "-- drifted\n" + (root / "insert_dws_trade_order_di.sql")
+                .read_text(encoding="utf-8"), encoding="utf-8")
+            config = HarnessConfig.load(root=root)
+            report = run_checks(
+                config, "db_a.dws_trade_order_di",
+                sql_files=[root / "insert_dws_trade_order_di.sql"],
+                contract_path=root / "contracts" / "contract.json",
+                reconcile_spec=spec_path, mode="strict")
+            item = next(i for i in report.items if i.name == "reconcile")
+            self.assertEqual(item.status, "unverified")
+            self.assertIn("not covered", item.reason)
+
+    def test_forged_producer_without_key_rejected(self):
+        """R2: unsigned producer=dw-reconcile claims are refused in strict."""
+        import os
+        import tempfile
+        from dw_core.evidence import build_evidence, verify_evidence
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ.pop("DW_HARNESS_EVIDENCE_KEY", None)
+            ev = build_evidence("reconcile-x", {"contract": "a" * 64},
+                                {"status": "pass"}, Path(tmp), producer="dw-reconcile")
+            self.assertEqual(ev["signature"], "")  # produced without a key
+            state = verify_evidence(ev, {"contract": "a" * 64}, strict=True)
+            self.assertEqual(state["state"], "untrusted")
+            self.assertIn("forged", state["reason"])
+
+    def test_signed_evidence_roundtrip_and_tamper(self):
+        """key closed loop: sign -> verify ok; tamper -> signature mismatch."""
+        import tempfile
+        from dw_core.evidence import build_evidence, verify_evidence
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = build_evidence("reconcile-x", {"contract": "a" * 64},
+                                {"status": "pass"}, Path(tmp), producer="dw-reconcile")
+            self.assertNotEqual(ev["signature"], "")
+            self.assertEqual(verify_evidence(ev, {"contract": "a" * 64},
+                                             strict=True)["state"], "valid")
+            tampered = dict(ev)
+            tampered["result_summary"] = {"status": "pass", "note": "hand-blessed"}
+            state = verify_evidence(tampered, {"contract": "a" * 64}, strict=True)
             self.assertEqual(state["state"], "untrusted")
 
 
@@ -266,11 +332,19 @@ class SkillFrontmatterLint(unittest.TestCase):
                         self.assertNotIn(",", rule,
                                          f"{skill.name}: '{rule}' is one malformed rule")
 
-    def test_statusline_hook_selftest(self):
-        proc = subprocess.run([sys.executable,
-                               str(REPO / "template" / ".claude" / "hooks" / "statusline.py"),
-                               "--selftest"], capture_output=True, text=True, timeout=30)
+    def test_statusline_hook_selftest_and_plain_text(self):
+        script = REPO / "template" / ".claude" / "hooks" / "statusline.py"
+        proc = subprocess.run([sys.executable, str(script), "--selftest"],
+                              capture_output=True, text=True, timeout=30)
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        # statusLine prints ONE plain-text line (stdout shown verbatim)
+        proc = subprocess.run([sys.executable, str(script)],
+                              input=json.dumps({"model": {"display_name": "Sonnet"}}),
+                              capture_output=True, text=True, timeout=30,
+                              cwd=str(REPO))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(proc.stdout.strip(), "empty statusline")
+        self.assertFalse(proc.stdout.lstrip().startswith("{"), proc.stdout)
 
 
 class GitBaselineTests(unittest.TestCase):

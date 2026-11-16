@@ -52,7 +52,30 @@ class ManifestTests(unittest.TestCase):
             self.skipTest("marketplace not built")
         data = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(data["plugins"][0]["source"], "./plugins/dw-harness")
+        # official schema: owner is an object, not a bare string (audit P0-5)
+        self.assertIsInstance(data.get("owner"), dict, data.get("owner"))
+        self.assertIn("name", data["owner"])
         self.assertTrue((REPO / "plugins" / "dw-harness" / ".claude-plugin" / "plugin.json").is_file())
+
+    def test_statusline_settings_schema(self):
+        """--statusline must write the official statusLine shape (audit R3):
+        one shell `command` string, NO args field."""
+        from dw_core.migrate import run_init
+        template = REPO / "template"
+        if not (template / ".claude" / "dw").is_dir():
+            self.skipTest("template not built")
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".claude").mkdir(parents=True)
+            (root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+            run_init(root, template, r"C:\Py39\python.exe", "", statusline=True)
+            settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+            status = settings["statusLine"]
+            self.assertEqual(status["type"], "command")
+            self.assertNotIn("args", status)
+            self.assertIn("statusline.py", status["command"])
+            self.assertIn(r"C:\Py39\python.exe", status["command"])
 
     def test_skill_frontmatter_names_match_dirs(self):
         skills = REPO / "src" / "skills"

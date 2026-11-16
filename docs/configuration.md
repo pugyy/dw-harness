@@ -74,7 +74,9 @@ dw contract decide contracts/contract.json --baseline baselines/v1.json \
 ## 证据与信任边界
 
 - 证据带 `producer`（dw-reconcile / dw-check / ci / manual）与可选 HMAC 签名（`DW_HARNESS_EVIDENCE_KEY`，仅环境变量）
-- `dw check --mode strict` 拒绝 manual/hand_edited 证据：手写 PASS 只能展示，不能过门禁
+- `dw check --mode strict` 拒绝 manual/hand_edited 证据；且**未配置 HMAC key 时拒绝一切「自称」
+  producer 的证据**（producer 是普通字段，无签名即可伪造）。本地闭环：export 同一个
+  key 生成与校验；CI 配 secret；不想配 key 用 `--mode local`
 - 证据记录 canonical 输入角色与绑定路径：contract / sql:<name> / ddl:<name> / reconcile:spec；任一重算不一致即 UNVERIFIED
 
 ## 环境变量（凭据只走环境，源码零字面量）

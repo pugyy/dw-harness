@@ -85,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--contract", default="", help="bind contract digest into evidence")
     p.add_argument("--sql", action="append", default=[],
                    help="bind sql file digest into evidence (repeatable)")
+    p.add_argument("--ddl", action="append", default=[],
+                   help="bind ddl file digest into evidence (repeatable)")
 
     p = sub.add_parser("check", help="acceptance report")
     p.add_argument("--table", default="",
@@ -297,16 +299,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             # canonical evidence roles, shared with `dw check` verification:
             # contract / sql:<name> / ddl:<name> / reconcile:spec
             inputs = {"reconcile:spec": text_digest(json.dumps(spec.to_dict(), sort_keys=True))}
-            binding_paths: Dict[str, str] = {}
+            binding_paths: Dict[str, str] = {"reconcile:spec": str(Path(args.spec).resolve())}
             bindings = dict(spec_raw.get("bindings") or {})
             contract_path = args.contract or bindings.get("contract")
             if contract_path and Path(contract_path).is_file():
                 inputs["contract"] = file_digest(Path(contract_path))
                 binding_paths["contract"] = str(Path(contract_path))
-            for sql_name in [*args.sql, *(bindings.get("sql") or [])]:
-                if Path(sql_name).is_file():
-                    inputs[f"sql:{Path(sql_name).name}"] = file_digest(Path(sql_name))
-                    binding_paths[f"sql:{Path(sql_name).name}"] = str(Path(sql_name))
+            for role_prefix, cli_list in (("sql", args.sql), ("ddl", args.ddl)):
+                for name in [*cli_list, *(bindings.get(role_prefix) or [])]:
+                    if Path(name).is_file():
+                        role = f"{role_prefix}:{Path(name).name}"
+                        inputs[role] = file_digest(Path(name))
+                        binding_paths[role] = str(Path(name))
             ev = build_evidence(
                 f"reconcile-{spec_raw.get('table', 'table')}",
                 inputs,

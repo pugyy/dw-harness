@@ -8,7 +8,7 @@ python scripts/run_demo.py       # 等价 dw demo
 
 日分区订单表 `db_a.dws_trade_order_di` 走完整链路：MaxCompute DDL/INSERT →
 SR DDL → 契约 → DDL/回填预演 → DQC → 键级对账 → 影响面 → 报告。
-18 个用例含反例 a–f（见 README）。报告落 `examples/demo/report/report.{json,md}`。
+20 个用例含反例 a–f + 证据伪造拒绝（见 README）。报告落 `examples/demo/report/report.{json,md}`。
 
 ## 真实环境部分（本仓库无凭据，未执行 —— 精确复现步骤如下）
 
@@ -28,8 +28,13 @@ cat > recon.json <<'EOF'
  "metrics": [{"column": "net_amount", "abs_tol": "0", "rel_tol": "0",
               "unit_left": "fen", "unit_right": "fen"}]}
 EOF
-dw reconcile --spec recon.json --save-evidence
+dw reconcile --spec recon.json --save-evidence \n  --contract contracts/contract.json \n  --sql insert_[表].sql --ddl ddl_[表].sql
+dw check --table db_a.dws_trade_order_di --reconcile-spec recon.json ...
 ```
+
+> strict 模式的证据信任边界（防伪造）：生产与校验需持有同一个
+> `DW_HARNESS_EVIDENCE_KEY`（本地 export 同一 key 即闭环；CI 用 secret）。
+> 未配 key 时 strict 对任何证据判 untrusted —— 用 `--mode local` 或配 key。
 
 预期：连接成功时预检+键级比较输出；无权限/超时 → UNVERIFIED + 原因。
 查询为参数绑定（分区值），表名走标识符白名单。

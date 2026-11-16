@@ -112,11 +112,21 @@ def verify_evidence(evidence: Optional[Dict], current_inputs: Dict[str, str],
         if evidence.get("signature", "") != expected:
             return {"state": "untrusted",
                     "reason": "HMAC signature mismatch (key configured, signature invalid/absent)"}
-    if strict and str(evidence.get("producer", "manual")) == "manual":
-        return {"state": "untrusted",
-                "reason": "producer=manual: strict mode only accepts evidence from "
-                          "deterministic producers (dw-reconcile/dw-check/ci); "
-                          "re-run the command or configure DW_HARNESS_EVIDENCE_KEY"}
+    if strict:
+        producer = str(evidence.get("producer", "manual"))
+        if producer == "manual":
+            return {"state": "untrusted",
+                    "reason": "producer=manual: strict mode only accepts evidence from "
+                              "deterministic producers; re-run the producing command"}
+        if not key:
+            # producer is a plain JSON field: without an HMAC key anyone can
+            # write producer="dw-reconcile". Strict mode refuses unsigned
+            # producer claims (audit R2). Local closed loop: export the same
+            # DW_HARNESS_EVIDENCE_KEY while producing and checking; CI: secret.
+            return {"state": "untrusted",
+                    "reason": "strict mode requires DW_HARNESS_EVIDENCE_KEY to "
+                              "authenticate producer claims; an unsigned "
+                              f"producer={producer!r} field can be forged"}
     for role, digest in current_inputs.items():
         recorded = (evidence.get("inputs") or {}).get(role)
         if not recorded:

@@ -152,8 +152,10 @@ def merge_settings(target: Path, python: str, dry_run: bool,
     settings["hooks"] = hooks
     if statusline and "statusLine" not in settings:
         exe, extra = _split_python(python)
-        settings["statusLine"] = {"type": "command", "command": exe[0],
-                                  "args": [*extra, "${CLAUDE_PROJECT_DIR}/.claude/hooks/statusline.py"]}
+        # official statusLine schema: type/command/padding/refreshInterval;
+        # command is ONE shell string (no args field)
+        command = " ".join([*exe, '"${CLAUDE_PROJECT_DIR}/.claude/hooks/statusline.py"'])
+        settings["statusLine"] = {"type": "command", "command": command, "padding": 0}
         report.actions.append("settings.json: dw statusLine added (user statusLine absent)")
     if not dry_run:
         if settings_path.is_file():

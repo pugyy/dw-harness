@@ -220,22 +220,28 @@ def run_checks(config: HarnessConfig, table: str, environment: str = "dev",
 
     # ---- reconcile evidence -------------------------------------------------
     ev = load_evidence(root, f"reconcile-{table}")
+    binding_paths = (ev or {}).get("binding_paths") or {}
     spec_path = reconcile_spec
+    if spec_path is None and binding_paths.get("reconcile:spec"):
+        candidate = Path(binding_paths["reconcile:spec"])
+        candidate = candidate if candidate.is_absolute() else root / candidate
+        if candidate.is_file():
+            spec_path = candidate
     if spec_path is None:
         candidates = sorted(root.glob("reconcile_*.json"))
         spec_path = candidates[0] if len(candidates) == 1 else None
-    current: Dict[str, str] = {}
-    binding_paths = (ev or {}).get("binding_paths") or {}
-    if binding_paths:
-        # recompute exactly the digests the producer bound (recorded paths)
-        for role, raw_path in binding_paths.items():
-            p = Path(raw_path)
-            if not p.is_absolute():
-                p = root / p
-            current[role] = file_digest(p) if p.is_file() else f"missing:{raw_path}"
-    else:
-        current = {k: v for k, v in inputs.items()
-                   if k == "contract" or k.startswith(("sql:", "ddl:"))}
+    # verification set = (roles this check cares about) UNION (roles the
+    # evidence bound). Roles present in the check but NOT covered by the
+    # evidence make it stale — partial bindings cannot pass (audit R1).
+    current = {k: v for k, v in inputs.items()
+               if k == "contract" or k.startswith(("sql:", "ddl:"))}
+    for role, raw_path in binding_paths.items():
+        if role == "reconcile:spec":
+            continue  # handled below with the normalized basis
+        p = Path(raw_path)
+        if not p.is_absolute():
+            p = root / p
+        current[role] = file_digest(p) if p.is_file() else f"missing:{raw_path}"
     if spec_path is not None and spec_path.is_file():
         # same normalized basis the CLI producer records (defaults filled in)
         from .reconcile import ReconcileSpec

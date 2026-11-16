@@ -98,16 +98,23 @@ class _DbAdapter:
             _q(ident)
 
     def partition_exists(self) -> bool:
-        """Real check: COUNT under the partition predicate (value is bound).
+        """Metadata-level check: is the partition present at all?
 
-        A missing partition and an empty-but-present partition are distinct;
-        both surface through prechecks instead of silently comparing equal.
+        COUNT cannot distinguish 'missing' from 'present but empty'; adapters
+        must consult metadata (audit R6). Value is parameter-bound where the
+        query is SQL; identifiers stay allowlist-validated.
         """
-        count = self.partition_count()
-        return count is not None
+        exists = self._partition_in_metadata()
+        if exists is None:
+            raise ReconcileError(
+                f"partition existence undeterminable for {self.table}")
+        return exists
 
     def partition_count(self) -> Optional[int]:
         raise ReconcileError("partition_count not implemented for this adapter")
+
+    def _partition_in_metadata(self) -> Optional[bool]:
+        raise ReconcileError("partition metadata not implemented for this adapter")
 
 
 class MaxComputeAdapter(_DbAdapter):
@@ -140,6 +147,15 @@ class MaxComputeAdapter(_DbAdapter):
                 values = record.values if hasattr(record, "values") else record
                 return int(values.get("cnt", list(values)[0]) if isinstance(values, dict) else values[0])
         return None
+
+    def _partition_in_metadata(self) -> Optional[bool]:
+        # PyODPS table API (not SQL, so nothing to bind); untested against a
+        # live instance — flagged in docs/support-matrix.md.
+        table = self._connect().get_table(self.table)
+        try:
+            return bool(table.exist_partition({self.partition_column: self.partition}))
+        except AttributeError:
+            return None
 
     def fetch(self, limit: int) -> Tuple[List[Dict], bool]:
         o = self._connect()
@@ -191,6 +207,28 @@ class StarRocksAdapter(_DbAdapter):
                     (self.partition,))  # parameter binding
                 row = cursor.fetchone()
                 return int(row["cnt"]) if row else None
+        finally:
+            conn.close()
+
+    def _partition_in_metadata(self) -> Optional[bool]:
+        # fully parameter-bound metadata query (no identifiers interpolated)
+        conn = self._connect()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) AS n FROM information_schema.partitions "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+                    (self.table.split(".")[-1],))
+                if int(cursor.fetchone()["n"]) == 0:
+                    return False  # table absent: partitions certainly absent
+                cursor.execute(
+                    "SHOW PARTITIONS FROM {table}".format(table=_q(self.table)))
+                wanted = f"{self.partition_column}={self.partition}".lower()
+                for row in cursor.fetchall():
+                    text = str(row.get("Partition", row.get("partition", "")))
+                    if wanted in text.replace("'", "").replace('"', "").lower():
+                        return True
+                return False
         finally:
             conn.close()
 

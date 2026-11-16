@@ -17,7 +17,7 @@ git clone https://github.com/pugyy/dw-harness.git && cd dw-harness
 python scripts/run_demo.py        # 无凭据、无数据库、无 Claude Code 依赖
 ```
 
-输出 18 个验收用例，包括反例：
+输出 20 个验收用例，包括反例：
 
 - `SELECT t.*` 在 hook 和 CLI 命中同一规则；`COUNT(*)`、字符串里的 `'drop table'` 不误报
 - `net_amount` 从「分」改「元」：SQL 全绿，**契约验收 FAIL 并指出缺少迁移决定**
@@ -45,6 +45,9 @@ harness.json / contracts）。需要 Claude Code ≥ 2.1.295
 git clone https://github.com/pugyy/dw-harness.git
 claude --plugin-dir ./dw-harness/plugins/dw-harness
 ```
+
+> `plugin-validate` workflow 需要 `CLAUDE_CODE_OAUTH_TOKEN` secret（缺了会红，不再静默跳过）；
+> 或改用预装 claude 的 self-hosted runner。
 
 ### 3. CI 里单独安装 CLI（无需 Claude Code）
 
@@ -74,7 +77,7 @@ plugins/dw-harness/           # 生成物：插件安装单元
 template/                     # 生成物：复制式安装
 contracts/schema/             # 表契约 JSON Schema（ODCS 精简）
 examples/demo/                # 订单表端到端 fixtures + 反例 a-f
-tests/                        # 86 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest
+tests/                        # 105 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
 ```
 
 ## 六层防线（v1 五层升级）
