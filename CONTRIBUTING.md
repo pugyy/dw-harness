@@ -9,6 +9,7 @@
   `tests/test_rules.py` 正反例，必要时在 `src/scaffold/harness.json` 与
   `docs/support-matrix.md` 同步默认值。
 - 新 skill：目录名 == frontmatter name，正文 ≤150 行，参考资料放 `references/`。
-- 文档双语：`docs/upgrade-from-v1.md` 与 `docs/upgrade-from-v1.en.md` 是同一份内容，
-  改一份必须同步另一份；新增文档若面向用户，给出中英两个入口并在 README 互链。
+- 文档双语：`README.md` / `README.en.md`，以及 `docs/upgrade-from-v1.md` /
+  `docs/upgrade-from-v1.en.md`，各自是同一份内容；改一份必须同步另一份，
+  新增用户文档时给出中英两个入口并在 README 互链。
 - 提交信息用中英均可，说明"改了哪个层"（core / hooks / skills / build / docs）。

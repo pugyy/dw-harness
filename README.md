@@ -1,6 +1,6 @@
-# dw-harness v2
+# dw-harness
 
-__数仓 AI 编程：装得上（plugin）、管得住（fail-closed 守卫）、说得清（契约 + 验收报告）、跑得回（键级对账）__
+[中文](README.md) | [English](README.en.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)
@@ -8,10 +8,61 @@ __数仓 AI 编程：装得上（plugin）、管得住（fail-closed 守卫）�
 [![Release](https://img.shields.io/github/v/release/pugyy/dw-harness)](https://github.com/pugyy/dw-harness/releases)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://github.com/pugyy/dw-harness#install)
 
-> 用 AI 做数仓开发，痛点从来不是"不会写 SQL"，而是：字段口径靠记忆、规范执行靠自觉、
-> 改没改对靠感觉。dw-harness v2 把这三件事全部交给确定性代码：**契约记录口径，
-> hooks 强制规范，`dw check` 出四态验收报告，`dw reconcile` 做键级对账。**
-> MaxCompute → StarRocks 主线 + OneData 八步工作流，v1 的所有能力全部保留并升级。
+**数仓 AI 编程：装得上、管得住、说得清、跑得回。**
+
+> 字段口径靠记忆、规范执行靠自觉、改没改对靠感觉，是数仓 AI 开发里最常见的三个问题。
+> dw-harness 把这三件事交给确定性代码：契约记录口径，hooks 强制规范，
+> `dw check` 出四态验收报告，`dw reconcile` 做键级对账。
+> MaxCompute → StarRocks 主线 + OneData 八步工作流。
+
+## 版本历史
+
+### v1.0.0 — 2026-05-23 — 初始版本
+
+首个公开版本，以复制 `.claude` 模板的方式提供一套数仓 AI 开发规范：
+
+- 五层防线：`CLAUDE.md`、Auto Memory、Hooks、Subagents、Skills
+- 3 个 Hook：`validate_sql.py`（写后 SQL 规范检查）、`block_dangerous_ddl.py`（Bash 危险 DDL 拦截）、`inject_context.py`（compact 后重注入规范）
+- 8 个 Skill：需求分析、技术设计、ETL 开发、自测、数据比对、SR 导入、性能优化、DQC
+- 4 个 Subagent：`dw-explorer`、`sql-validator`、`data-quality-checker`、`data-comparator`
+- 支持 ODPS/MaxCompute、Hive、Spark；内置 23 项自测和 9 类 DQC 模板
+- Python 3.9+；用冒烟测试验证 Hook
+
+### v2.0.0 — 2026-11-16 — Evidence Gate
+
+**交付形态**
+
+- 从复制模板升级为 Claude Code 插件 + Marketplace + `dw` CLI，保留复制模板作为离线/内网路径
+- `src/` 单一源码，`plugins/`、`template/`、`.claude-plugin/marketplace.json` 由 `build.py` 生成，CI 用 `build --check` 阻止漂移
+- 15 个 Skill、4 个平铺 Subagent、7 个 Hook 适配器；新增 bootstrap、contract、check、next、review、backfill 和按需加载的 SQL 参考
+
+**新增能力**
+
+- 表契约：`dw contract validate/compile/diff`，记录粒度、业务键、分区、列类型、币种/单位、质量阈值和 SLA；破坏性变更必须记录迁移决定
+- 验收门禁：`dw check` 输出 PASS/FAIL/UNVERIFIED/N/A 四态，退出码 0/1/2；证据绑定 SQL、DDL、契约、基线和分区
+- 键级对账：`dw reconcile` 支持文件、MaxCompute、StarRocks，使用 Decimal、单位换算、绝对/相对容差、零基线和 NULL 语义
+- 计划与生成：`dw plan ddl/backfill`、`dw dqc gen/check`、`dw impact`
+- 工程化守卫：`dw lint`、`Bash|PowerShell` 危险命令拦截、`-f`/`--file=` 检查、PII 扫描、带有效期的策略例外
+- 会话体验：SessionStart 状态卡、PostCompact 本地落盘、statusLine、SessionEnd handoff、默认关闭的本地 stdio MCP
+- 三平台 CI：ubuntu-24.04 / Windows / macOS × Python 3.9 / 3.13，包含干净 wheel 安装步骤
+
+**变更**
+
+- 插件模式命令带 `dw-harness:` 前缀；模板模式保留原名
+- `init` 改为合并式迁移：备份、`managed.json`、冲突报告，不再 `rm -rf .claude`
+- Hook 重命名：`validate_sql.py` → `validate_post.py`，`block_dangerous_ddl.py` → `guard_shell.py`，`inject_context.py` → `session_context.py` + `post_compact.py`
+- Subagent 目录拍平；不再依赖插件环境会忽略的 `permissionMode`
+- 移除无效的 `FileChanged` 接线，旁路修改改用 `dw lint --changed` / `dw check --changed`
+- strict 证据需要 `DW_HARNESS_EVIDENCE_KEY`；不配 key 时用 `--mode local`
+- 插件 Hook 使用 PATH 上的 `python`；只有 `python3` 的环境需要解释器别名或模板安装
+
+**保留**
+
+- OneData 八步流程、23 项自测、9 类 DQC
+- MaxCompute → StarRocks 主线
+- 四个 Subagent 的职责划分
+- 路径级规则、SQL 规范、金额 `DECIMAL(20,4)`、`partition_dt` 约定
+- 自定义 Skill、规则、权限和状态栏：迁移只合并，不主动删除
 
 ## 30 秒看懂（订单表演示，离线可复现）
 
