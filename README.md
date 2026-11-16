@@ -10,12 +10,35 @@
 
 **数仓 AI 编程：装得上、管得住、说得清、跑得回。**
 
-> 字段口径靠记忆、规范执行靠自觉、改没改对靠感觉，是数仓 AI 开发里最常见的三个问题。
-> dw-harness 把这三件事交给确定性代码：契约记录口径，hooks 强制规范，
-> `dw check` 出四态验收报告，`dw reconcile` 做键级对账。
-> MaxCompute → StarRocks 主线 + OneData 八步工作流。
+## 简介
+
+dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约、SQL 规范、危险操作守卫、键级对账和四态验收报告做成可安装、可配置、可验证的工程层，主线是 MaxCompute → StarRocks，流程沿用 OneData 八步。
+
+适合使用 Claude Code 的数仓/数据平台团队，尤其是已经在 MaxCompute、StarRocks、Hive 或 Spark 上做 ETL，并希望把 AI 产出纳入 review 和 CI 的团队。它不替代调度系统、元数据平台或 BI 工具，也不是一个只做 SQL 格式化的插件。
+
+## 目录
+
+- [版本历史](#版本历史)
+- [让 AI Agent 帮你部署](#让-ai-agent-帮你部署)
+- [为什么是 dw-harness](#为什么是-dw-harness)
+- [功能](#功能)
+- [30 秒演示](#30-秒演示)
+- [安装](#安装)
+- [架构](#架构)
+- [六层防线](#六层防线)
+- [CLI](#cli)
+- [支持矩阵](#支持矩阵)
+- [文档](#文档)
+- [关键词](#关键词)
+- [参与贡献](#参与贡献)
+- [License](#license)
 
 ## 版本历史
+
+| 版本 | 日期 | 说明 |
+|---|---|---|
+| v1.0.0 | 2026-05-23 | 初始版本：复制模板、五层防线、3 个 Hook、8 个 Skill、4 个 Subagent |
+| v2.0.0 | 2026-11-16 | Evidence Gate：插件 + CLI、表契约、四态验收、键级对账、证据链 |
 
 ### v1.0.0 — 2026-05-23 — 初始版本
 
@@ -64,7 +87,63 @@
 - 路径级规则、SQL 规范、金额 `DECIMAL(20,4)`、`partition_dt` 约定
 - 自定义 Skill、规则、权限和状态栏：迁移只合并，不主动删除
 
-## 30 秒看懂（订单表演示，离线可复现）
+## 让 AI Agent 帮你部署
+
+把下面这段直接发给有终端权限的 AI Agent（Claude Code、Codex、Cursor 或其他编码 Agent）。它覆盖环境检查、备份、插件/模板选择、项目文件生成和验收。Agent 遇到冲突时应停下，而不是自行删除你的配置。
+
+```text
+你是一名资深数据平台工程师。请在我的数据仓库项目中安装并验收 dw-harness v2.0.0：
+https://github.com/pugyy/dw-harness
+
+执行顺序：
+1. 检查环境并记录：操作系统、shell、git、python --version（>=3.9）、claude --version（>=2.1.295，如果有 Claude Code）。
+2. 备份：cp -r .claude .claude.v1.bak（PowerShell 用 Copy-Item -Recurse .claude .claude.v1.bak）；确认 git status。
+3. 选择安装路径：
+   A. 有 Claude Code：依次执行 /plugin marketplace add pugyy/dw-harness、/plugin install dw-harness@dw-harness、/dw-harness:dw-bootstrap。
+   B. 没有 Claude Code 或需要离线：pip install "dw-harness[yaml,deep]"；先 dw init --target . --python python --dry-run，确认输出后再 dw init --target . --python python。
+4. 不要覆盖已有的 settings.json、skills、rules、agents、statusLine。遇到冲突先停下，列出文件、冲突原因和建议，不要自行删除。
+5. 检查生成结果：AGENTS.md、根 CLAUDE.md、.claude/rules/、.claude/dw/harness.json、contracts/contract.example.json。把 dialect 设为 odps 或 starrocks，把已上线只读表填进 protected_objects。
+6. 验收并记录退出码：
+   - dw doctor --mode plugin 或 --mode template
+   - dw lint 一个包含 SELECT t.* 的样例（必须失败）
+   - dw lint 一个包含 COUNT(*) 的样例（必须通过）
+   - dw check --table <表> --env dev --partition <yyyyMMdd>
+7. 输出报告：改动文件、执行过的命令、验收结果、未验证项、回滚命令。
+
+约束：
+- 不要执行 DROP/TRUNCATE/ALTER TABLE ... DROP/INSERT OVERWRITE。
+- 不要提交或推送 git。
+- 不要修改我没有明确同意的生产配置。
+- 无法验证的项（真实 MaxCompute/StarRocks、Claude Code 真机加载）写入“未验证”，不要标成通过。
+```
+
+English version of the same prompt is in [README.en.md](README.en.md#let-an-ai-agent-install-it).
+
+## 为什么是 dw-harness
+
+| 常见问题 | dw-harness 的做法 |
+|---|---|
+| 字段口径散落在文档、聊天和人的记忆里 | 表契约记录粒度、业务键、分区、类型、币种/单位和阈值；`dw check` 按契约验收 |
+| SQL 规范靠 review 提醒，执行不稳定 | PreToolUse/PostToolUse Hook + `dw lint` 使用同一套规则；错误退出码可直接接 CI |
+| 改完 SQL 说不清有没有验证过 | 证据绑定 SQL、DDL、契约、基线和分区；输入变化自动变 UNVERIFIED |
+| 对账只看总行数、总金额，金额对调查不出来 | 键级对账逐键比较，支持单位换算、容差、零基线和 NULL 语义 |
+| 升级模板会覆盖团队自定义内容 | `init` 合并式迁移：备份、`managed.json`、冲突报告，不删除用户配置 |
+| 血缘、自测、比对结果撑爆主对话 | 4 个 Subagent + `context: fork`；主对话只收摘要 |
+
+## 功能
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 表契约 | `dw contract validate/compile/diff` | 记录表标识、粒度、业务键、分区、列类型、币种/单位、质量阈值、SLA |
+| SQL 校验 | `dw lint`、PostToolUse | 覆盖 ODPS/Hive/Spark/StarRocks；区分引擎语法与团队政策；`t.*`、字符串伪关键字、子查询都处理 |
+| 执行前守卫 | PreToolUse、`guard_shell.py` | Bash/PowerShell 危险 DDL、无 WHERE DML、`-f`/`--file=`、分区安全阀、PII、带期限的例外 |
+| 键级对账 | `dw reconcile` | 文件、MaxCompute、StarRocks；预检分区/空键/重复键/缺失键，再做总量和逐键比较 |
+| 验收与证据 | `dw check` | 四态报告、0/1/2 退出码、JSON + PR Markdown、输入绑定的 evidence |
+| 计划与生成 | `dw plan`、`dw dqc`、`dw impact` | DDL 迁移/回填预演、DQC 稳定 ID、仓库 SQL 血缘 |
+| 会话与协作 | Hooks、Skills、Agents、MCP | 状态卡、handoff、statusLine、15 个 Skill、4 个 Subagent、可选本地 MCP |
+| 分发与 CI | 插件、CLI、模板 | Marketplace 安装、`pip install`、`build --check`、三平台矩阵 + wheel 安装 |
+
+## 30 秒演示（订单表演示，离线可复现）
 
 ```bash
 git clone https://github.com/pugyy/dw-harness.git && cd dw-harness
@@ -84,14 +163,12 @@ python scripts/run_demo.py        # 无凭据、无数据库、无 Claude Code �
 
 ### 1. Claude Code 插件（主路径，命令带 `dw-harness:` 前缀）
 
-```
+```text
 /plugin marketplace add pugyy/dw-harness
 /plugin install dw-harness@dw-harness
 ```
 
-装完在项目里跑 `/dw-harness:dw-bootstrap` 生成项目侧文件（AGENTS.md / rules /
-harness.json / contracts）。需要 Claude Code ≥ 2.1.295
-（Hook 启动失败时可阻断）。插件使用 PATH 上的 Python 3.9+ `python`，复制模板可用 `dw init --python` 指定解释器。
+装完在项目里跑 `/dw-harness:dw-bootstrap` 生成项目侧文件（AGENTS.md / rules / harness.json / contracts）。需要 Claude Code ≥ 2.1.295（Hook 启动失败时可阻断）。插件使用 PATH 上的 Python 3.9+ `python`；复制模板可用 `dw init --python` 指定解释器。
 
 ### 2. 本地加载插件（开发/试用）
 
@@ -100,8 +177,7 @@ git clone https://github.com/pugyy/dw-harness.git
 claude --plugin-dir ./dw-harness/plugins/dw-harness
 ```
 
-> `plugin-validate` workflow 需要 `CLAUDE_CODE_OAUTH_TOKEN` secret（缺了会红，不再静默跳过）；
-> 或改用预装 claude 的 self-hosted runner。
+`plugin-validate` workflow 需要 `CLAUDE_CODE_OAUTH_TOKEN` secret（缺了会红，不再静默跳过）；或改用预装 claude 的 self-hosted runner。
 
 ### 3. CI 里单独安装 CLI（无需 Claude Code）
 
@@ -112,12 +188,11 @@ python scripts/build.py --check   # 生成物漂移门禁
 python scripts/run_demo.py        # 离线端到端验收
 ```
 
-复制模板模式（v1 风格，命令保留原名）仍然支持：`bash init.sh /your/project`
-（合并式，不再 rm -rf）。v1 升级详见 [中文](docs/upgrade-from-v1.md) / [English](docs/upgrade-from-v1.en.md)。
+复制模板模式（v1 风格，命令保留原名）仍然支持：`bash init.sh /your/project`（合并式，不再 rm -rf）。v1 升级详见 [中文](docs/upgrade-from-v1.md) / [English](docs/upgrade-from-v1.en.md)。
 
-## 架构一览
+## 架构
 
-```
+```text
 src/                          # 唯一真源（手写只动这里）
 ├── dw_core/                  # 核心包：CLI / hooks / CI / MCP 共用，纯标准库
 ├── hooks/                    # 7 个 Claude Code hook 适配器（薄壳，fail-closed）
@@ -148,7 +223,7 @@ tests/                        # 123 个测试：规则/守卫/契约/对账/证�
 > strict 模式的证据门禁需要 `DW_HARNESS_EVIDENCE_KEY`（`dw evidence keygen` 生成，
 > 生产与校验同 key；不配 key 时 strict 会把证据判 untrusted，临时用 `--mode local`）。
 
-## CLI 速查
+## CLI
 
 ```bash
 dw init --target . --python python [--mode plugin] [--dialect odps] [--dry-run] [--mcp]
@@ -160,18 +235,18 @@ dw plan backfill --table t --start 20260101 --end 20261115 [--env prod]
 dw dqc gen --contract c.json | dw dqc check ...     # 稳定 ID 规则生成/防漂移
 dw impact --table db.t [--dataworks]                # 仓库 SQL 血缘 + 可选 DataWorks
 dw reconcile --spec spec.json [--save-evidence]     # 键级对账（文件/MaxCompute/StarRocks）
-dw evidence keygen                             # 生成 DW_HARNESS_EVIDENCE_KEY（strict 信任边界）
-dw check --table t --env offline --partition 20261115 # 四态验收报告（JSON + PR Markdown）
-dw next                                              # 从交付物推断八步进度
-dw lint --changed / dw check --changed                # git 变更集批量模式
-dw demo                                              # 离线端到端验收
+dw evidence keygen                                  # 生成 DW_HARNESS_EVIDENCE_KEY（strict 信任边界）
+dw check --table t --env offline --partition 20261115
+dw next                                             # 从交付物推断八步进度
+dw lint --changed / dw check --changed              # git 变更集批量模式
+dw demo                                             # 离线端到端验收
 ```
 
 ## 支持矩阵
 
-详见 [docs/support-matrix.md](docs/support-matrix.md)。要点：SQL 校验
-odps/hive/spark/starrocks（SR 的 INSERT 省分区是引擎合法，政策降级为 warn）；
-核心与 hooks 只用标准库（Python ≥3.9）；YAML 契约 / sqlglot 深检 / 数据库适配器为可选能力。
+详见 [docs/support-matrix.md](docs/support-matrix.md)。要点：SQL 校验 odps/hive/spark/starrocks（SR 的 INSERT 省分区是引擎合法，政策降级为 warn）；核心与 hooks 只用标准库（Python ≥3.9）；YAML 契约 / sqlglot 深检 / 数据库适配器为可选能力。
+
+真实 MaxCompute / StarRocks / DataWorks 适配器尚未连生产实例；`plugin-validate` 需要 secret 手动触发。这两项在 [docs/e2e-demo.md](docs/e2e-demo.md) 有复现步骤，发布说明里也标为“未验证”。
 
 ## 文档
 
@@ -182,6 +257,19 @@ odps/hive/spark/starrocks（SR 的 INSERT 省分区是引擎合法，政策降�
 - [docs/mcp.md](docs/mcp.md) — 本地 MCP server 注册与工具清单
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 变更全录
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
+
+## 关键词
+
+Claude Code 插件、Claude Code plugin、Claude Code skills、Claude Code hooks、data warehouse、数据仓库、MaxCompute、ODPS、StarRocks、Hive、Spark SQL、SQL lint、SQL 规范、table contract、数据契约、data quality、数据质量、key-level reconciliation、键级对账、ETL、OneData、数据开发、AI coding、AI Agent、MCP、Python。
+
+## 参与贡献
+
+- 代码改动：先读 [CONTRIBUTING.md](CONTRIBUTING.md)。`src/` 是唯一真源，生成物由 `build.py` 产出。
+- 文档：`README.md` / `README.en.md`、`docs/upgrade-from-v1.md` / `.en.md` 必须同步修改。
+- 安全问题：见 [SECURITY.md](SECURITY.md)。
+- 问题与建议：开 GitHub Issue；真实环境验证结果也欢迎提交。
+
+如果 dw-harness 对你的团队有用，欢迎点一个 Star，让更多数仓团队看到。
 
 ## License
 

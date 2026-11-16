@@ -10,9 +10,35 @@
 
 **Data warehouse AI development that installs, enforces checks, and leaves evidence.**
 
-> Three failures show up repeatedly in warehouse work: field definitions live in people's heads, conventions depend on discipline, and nobody can prove a change is correct. dw-harness moves those three problems into deterministic code: contracts record definitions, hooks enforce conventions, `dw check` produces a four-state acceptance report, and `dw reconcile` compares data at key level. The MaxCompute → StarRocks mainline and the OneData eight-step workflow remain.
+## What it is
+
+dw-harness is a Claude Code plugin and CLI for data warehouse teams. It packages table contracts, SQL conventions, dangerous-operation guards, key-level reconciliation and a four-state acceptance report into an installable, configurable and verifiable engineering layer. The mainline is MaxCompute → StarRocks; the workflow follows the OneData eight steps.
+
+It is built for warehouse and data-platform teams already using Claude Code, especially those running ETL on MaxCompute, StarRocks, Hive or Spark and wanting AI output to pass review and CI. It does not replace a scheduler, metadata platform or BI tool, and it is not a SQL formatter.
+
+## Contents
+
+- [Release history](#release-history)
+- [Let an AI agent install it](#let-an-ai-agent-install-it)
+- [Why dw-harness](#why-dw-harness)
+- [Features](#features)
+- [30-second demo](#30-second-demo)
+- [Install](#install)
+- [Architecture](#architecture)
+- [Six layers](#six-layers)
+- [CLI](#cli)
+- [Support](#support)
+- [Documentation](#documentation)
+- [Keywords](#keywords)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Release history
+
+| Version | Date | Summary |
+|---|---|---|
+| v1.0.0 | 2026-05-23 | Initial release: copy template, five layers, three hooks, eight skills, four subagents |
+| v2.0.0 | 2026-11-16 | Evidence Gate: plugin + CLI, table contracts, four-state acceptance, key-level reconciliation, evidence chain |
 
 ### v1.0.0 — 2026-05-23 — Initial release
 
@@ -60,6 +86,62 @@ The first public version, delivered as a copyable `.claude` template for data wa
 - The four subagent responsibilities
 - Path-scoped rules, SQL conventions, `DECIMAL(20,4)` for money and the `partition_dt` convention
 - Custom skills, rules, permissions and status line entries: migration merges them and does not remove them
+
+## Let an AI agent install it
+
+Paste the block below into an AI coding agent with terminal access (Claude Code, Codex, Cursor or similar). It covers environment checks, backup, plugin-or-template selection, project scaffolding and acceptance. The agent is told to stop on conflicts instead of deleting your configuration.
+
+```text
+You are a senior data platform engineer. Install and validate dw-harness v2.0.0 in my data warehouse project:
+https://github.com/pugyy/dw-harness
+
+Do this in order:
+1. Check and record: OS, shell, git, python --version (>=3.9), claude --version (>=2.1.295, if Claude Code is installed).
+2. Back up: cp -r .claude .claude.v1.bak (PowerShell: Copy-Item -Recurse .claude .claude.v1.bak). Confirm git status.
+3. Choose an install path:
+   A. Claude Code: run /plugin marketplace add pugyy/dw-harness, /plugin install dw-harness@dw-harness, then /dw-harness:dw-bootstrap.
+   B. No Claude Code or offline: pip install "dw-harness[yaml,deep]"; run dw init --target . --python python --dry-run, review it, then run dw init --target . --python python.
+4. Do not overwrite existing settings.json, skills, rules, agents or statusLine. On conflict, stop and list the files, the reason and a recommendation. Do not delete anything.
+5. Inspect the result: AGENTS.md, root CLAUDE.md, .claude/rules/, .claude/dw/harness.json, contracts/contract.example.json. Set dialect to odps or starrocks. Put read-only production tables into protected_objects.
+6. Validate and record exit codes:
+   - dw doctor --mode plugin or --mode template
+   - dw lint on a sample containing SELECT t.* (must fail)
+   - dw lint on a sample containing COUNT(*) (must pass)
+   - dw check --table <table> --env dev --partition <yyyyMMdd>
+7. Report: changed files, commands run, validation results, unverified items and rollback commands.
+
+Constraints:
+- Do not run DROP/TRUNCATE/ALTER TABLE ... DROP/INSERT OVERWRITE.
+- Do not commit or push to git.
+- Do not change production settings I have not approved.
+- Anything you cannot verify (live MaxCompute/StarRocks, real Claude Code plugin load) must be listed as "unverified", not "passed".
+```
+
+The Chinese version of the same prompt is in [README.md](README.md#让-ai-agent-帮你部署).
+
+## Why dw-harness
+
+| Common problem | What dw-harness does |
+|---|---|
+| Field definitions live in docs, chat and people's memory | A table contract records grain, business key, partition, types, currency/unit and thresholds; `dw check` enforces it |
+| SQL conventions depend on review reminders | PreToolUse/PostToolUse hooks and `dw lint` share one rule set; exit codes plug into CI |
+| Nobody can prove a change was validated | Evidence binds SQL, DDL, contract, baseline and partition; any input change becomes UNVERIFIED |
+| Reconciliation only compares totals, missing swapped amounts | Key-level comparison with unit conversion, tolerances, zero-baseline and NULL semantics |
+| Upgrading the template overwrites team customisations | Merge-style `init`: backups, `managed.json`, conflict reports; user files are not deleted |
+| Lineage, self-test and comparison output drown the main conversation | Four subagents plus `context: fork`; the main thread gets summaries |
+
+## Features
+
+| Capability | Entry point | Notes |
+|---|---|---|
+| Table contracts | `dw contract validate/compile/diff` | Table identity, grain, business key, partition, column types, currency/unit, thresholds, SLA |
+| SQL lint | `dw lint`, PostToolUse | ODPS/Hive/Spark/StarRocks; engine vs policy rules; `t.*`, string literals, subqueries |
+| Pre-execution guards | PreToolUse, `guard_shell.py` | Dangerous DDL on Bash/PowerShell, DML without WHERE, `-f`/`--file=`, partition safety, PII, time-bounded exceptions |
+| Key-level reconciliation | `dw reconcile` | File, MaxCompute and StarRocks adapters; prechecks for partition/empty/duplicate/missing keys, then totals and per-key comparison |
+| Acceptance and evidence | `dw check` | Four-state report, exit codes 0/1/2, JSON and PR Markdown, input-bound evidence |
+| Planning and generation | `dw plan`, `dw dqc`, `dw impact` | DDL migration/backfill rehearsal, stable DQC IDs, repository SQL lineage |
+| Session workflow | Hooks, skills, agents, MCP | State card, handoff, statusLine, 15 skills, four subagents, opt-in local MCP |
+| Distribution and CI | Plugin, CLI, template | Marketplace install, `pip install`, `build --check`, three-platform matrix with wheel install |
 
 ## 30-second demo (orders table, offline)
 
@@ -163,6 +245,8 @@ dw demo                                             # offline end-to-end demo
 
 See [docs/support-matrix.md](docs/support-matrix.md). SQL lint covers odps/hive/spark/starrocks; StarRocks `INSERT` without a partition is engine-legal and downgraded to a warning by policy. Core and hooks use only the standard library (Python 3.9+); YAML contracts, sqlglot deep parsing and database adapters are optional capabilities.
 
+The live MaxCompute, StarRocks and DataWorks adapters have not been tested against production instances. `plugin-validate` needs a secret and a manual dispatch. Both are marked unverified in the release notes; reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
+
 ## Documentation
 
 - [docs/configuration.md](docs/configuration.md) — harness.json, contracts, exceptions, evidence
@@ -172,6 +256,19 @@ See [docs/support-matrix.md](docs/support-matrix.md). SQL lint covers odps/hive/
 - [docs/mcp.md](docs/mcp.md) — local MCP registration and tool list
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 changes
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
+
+## Keywords
+
+Claude Code plugin, Claude Code skills, Claude Code hooks, data warehouse, MaxCompute, ODPS, StarRocks, Hive, Spark SQL, SQL lint, SQL conventions, table contract, data contract, data quality, key-level reconciliation, ETL, OneData, data engineering, AI coding, AI agent, MCP, Python.
+
+## Contributing
+
+- Code: read [CONTRIBUTING.md](CONTRIBUTING.md). `src/` is the only source; generated artifacts come from `build.py`.
+- Docs: `README.md` / `README.en.md` and `docs/upgrade-from-v1.md` / `.en.md` must stay in sync.
+- Security: see [SECURITY.md](SECURITY.md).
+- Questions and reports: open a GitHub issue. Live-environment validation results are welcome.
+
+If dw-harness helps your team, a star makes it easier for other warehouse teams to find it.
 
 ## License
 
