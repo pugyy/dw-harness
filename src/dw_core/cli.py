@@ -294,9 +294,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         from .reconcile import ReconcileSpec, reconcile
         from .evidence import build_evidence, save_evidence, text_digest
         from .evidence import file_digest
-        spec_raw = json.loads(Path(args.spec).read_text(encoding="utf-8-sig"))
+        try:
+            spec_raw = json.loads(Path(args.spec).read_text(encoding="utf-8-sig"))
+        except (json.JSONDecodeError, OSError) as exc:
+            _print_json({"status": "unverified",
+                         "reasons": [f"spec unreadable: {exc}"]})
+            return 2
         spec_keys = ("left", "right", "keys", "metrics", "sample_rows", "max_rows")
-        spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
+        try:
+            spec = ReconcileSpec(**{k: spec_raw[k] for k in spec_keys if k in spec_raw})
+        except (TypeError, ValueError) as exc:
+            _print_json({"status": "unverified",
+                         "reasons": [f"spec malformed: {type(exc).__name__}: {exc}"]})
+            return 2
         result = reconcile(spec)
         payload = {"spec": spec.to_dict(), **result.to_dict()}
         if args.save_evidence and result.status != "unverified":

@@ -108,6 +108,22 @@ class ManifestTests(unittest.TestCase):
                               capture_output=True, text=True, timeout=120)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
+    def test_doc_test_counts_match_reality(self):
+        """Anti-drift: every '<N> 个测试 / <N> tests' in README/CHANGELOG must
+        equal the actual number of collected test methods (audit P2)."""
+        import re as _re
+        actual = 0
+        for path in sorted((REPO / "tests").glob("test_*.py")):
+            actual += len(_re.findall(r"^\s*def test_", path.read_text(encoding="utf-8"), _re.M))
+        pattern = _re.compile(r"(\d+)\s*(?:个测试|个测试全绿|tests\b)")
+        for doc in (REPO / "README.md", REPO / "CHANGELOG.md"):
+            text = doc.read_text(encoding="utf-8")
+            found = [int(m.group(1)) for m in pattern.finditer(text)]
+            self.assertTrue(found, f"{doc.name}: no test-count claims found")
+            for number in found:
+                self.assertEqual(number, actual,
+                                 f"{doc.name} claims {number} tests, reality is {actual}")
+
 
 class MigrationTests(unittest.TestCase):
     def _v1_project(self, root: Path):

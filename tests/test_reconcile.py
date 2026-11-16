@@ -99,6 +99,30 @@ class ReconcileTests(unittest.TestCase):
             StarRocksAdapter({"table": "evil; DROP TABLE x", "partition": "p"},
                              ["k"], ["m"])
 
+    def test_bad_identifier_via_reconcile_is_unverified(self):
+        """rc.4 audit: constructor ReconcileError must not escape reconcile()."""
+        result = reconcile(ReconcileSpec(
+            left={"adapter": "starrocks", "table": "evil; DROP TABLE x",
+                  "partition": "p"},
+            right={"adapter": "file", "path": str(FIX / "old.csv"),
+                   "partition": "p"},
+            keys=["k"], metrics=[{"column": "m", "abs_tol": "0", "rel_tol": "0",
+                                  "unit_left": "fen", "unit_right": "fen"}]))
+        self.assertEqual(result.status, "unverified")
+        self.assertTrue(any("adapter rejected" in r for r in result.reasons),
+                        result.reasons)
+
+    def test_missing_side_via_reconcile_is_unverified(self):
+        result = reconcile(ReconcileSpec(
+            left=None,
+            right={"adapter": "file", "path": str(FIX / "old.csv"),
+                   "partition": "p"},
+            keys=["k"], metrics=[{"column": "net_amount", "abs_tol": "0",
+                                  "rel_tol": "0", "unit_left": "fen",
+                                  "unit_right": "fen"}]))
+        self.assertEqual(result.status, "unverified")
+        self.assertTrue(result.reasons)
+
 
 if __name__ == "__main__":
     unittest.main()

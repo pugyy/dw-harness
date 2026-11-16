@@ -278,11 +278,19 @@ class ReconcileResult:
 def reconcile(spec: ReconcileSpec) -> ReconcileResult:
     result = ReconcileResult(status="unverified", reasons=[])
     metric_cols = [m["column"] for m in spec.metrics]
+    left_desc = spec.left or {}
+    right_desc = spec.right or {}
     try:
-        left_ad = ADAPTERS[spec.left.get("adapter", "file")](spec.left, spec.keys, metric_cols)
-        right_ad = ADAPTERS[spec.right.get("adapter", "file")](spec.right, spec.keys, metric_cols)
+        left_ad = ADAPTERS[left_desc.get("adapter", "file")](left_desc, spec.keys, metric_cols)
+        right_ad = ADAPTERS[right_desc.get("adapter", "file")](right_desc, spec.keys, metric_cols)
     except KeyError as exc:
         result.reasons.append(f"unknown adapter: {exc}")
+        return result
+    except ReconcileError as exc:  # bad identifiers, missing required fields
+        result.reasons.append(f"adapter rejected the spec: {exc}")
+        return result
+    except (TypeError, ValueError) as exc:  # malformed spec shapes
+        result.reasons.append(f"spec malformed: {type(exc).__name__}: {exc}")
         return result
 
     def _partition_present(adapter, side: str) -> Optional[bool]:
