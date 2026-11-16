@@ -62,7 +62,7 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 
 - 从复制模板升级为 Claude Code 插件 + Marketplace + `dw` CLI，保留复制模板作为离线/内网路径
 - `src/` 单一源码，`plugins/`、`template/`、`.claude-plugin/marketplace.json` 由 `build.py` 生成，CI 用 `build --check` 阻止漂移
-- 15 个 Skill、4 个平铺 Subagent、7 个 Hook 适配器；新增 bootstrap、contract、check、next、review、backfill 和按需加载的 SQL 参考
+- 15 个 Skill、4 个平铺 Subagent、6 个 Hook 适配器 + statusLine；新增 bootstrap、contract、check、next、review、backfill 和按需加载的 SQL 参考
 
 **新增能力**
 
@@ -239,7 +239,7 @@ python scripts/run_demo.py
 src/                          # 唯一真源（手写只动这里）
 ├── dw_core/                  # 核心包：CLI / hooks / CI / MCP 共用，纯标准库
 │   └── data/dialects/        # odps / hive / spark / starrocks 方言包（随包分发）
-├── hooks/                    # 7 个 Claude Code hook 适配器（薄壳，fail-closed）
+├── hooks/                    # 6 个 Claude Code hook 适配器 + statusline.py（薄壳，fail-closed）
 ├── skills/                   # 15 个 skill（八步 + bootstrap/contract/check/next/review/backfill/sql-reference）
 ├── agents/                   # 4 个 subagent（平铺，model: inherit，无 permissionMode 依赖）
 └── scaffold/                 # dw init 写入项目的模板（AGENTS.md/rules/harness.json）
