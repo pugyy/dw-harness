@@ -1,0 +1,28 @@
+{
+  "contract_id": "db_a.dws_trade_order_di",
+  "table": "db_a.dws_trade_order_di",
+  "version": "2",
+  "owner": "trade-team",
+  "granularity": "one row per order",
+  "business_keys": ["order_no"],
+  "partition": {"column": "partition_dt", "type": "string", "format": "yyyyMMdd"},
+  "columns": [
+    {"name": "order_no", "type": "string", "nullable": false,
+     "caliber": "订单号|dwd_trade_order_detail.order_no|直接继承",
+     "source": "db_a.dwd_trade_order_detail"},
+    {"name": "net_amount", "type": "decimal(20,4)", "nullable": true,
+     "currency": "CNY", "unit": "fen",
+     "caliber": "净额|dwd.net_amount|直接继承",
+     "source": "db_a.dwd_trade_order_detail"},
+    {"name": "pay_amount", "type": "decimal(20,4)", "nullable": true,
+     "currency": "CNY", "unit": "yuan",
+     "caliber": "支付金额|dwd.pay_amount|直接继承",
+     "source": "db_a.dwd_trade_order_detail"},
+    {"name": "order_status", "type": "string", "nullable": true,
+     "caliber": "订单状态|dwd.order_status|直接继承",
+     "source": "db_a.dwd_trade_order_detail"}
+  ],
+  "quality": {"row_count_fluctuation_max": "30%", "money_tolerance": "0.01%", "freshness_days": 1},
+  "sla": {"time": "08:00", "tz": "Asia/Shanghai"},
+  "sources": ["db_a.dwd_trade_order_detail"]
+}

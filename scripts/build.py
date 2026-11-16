@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Deterministic build: src/ -> plugins/dw-harness + template/ + marketplace.
+
+Both distribution forms are generated artifacts; `build --check` (CI) fails
+on drift so the two can never silently diverge from the single source.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+from typing import Dict, List
+
+REPO = Path(__file__).resolve().parents[1]
+SRC = REPO / "src"
+PLUGIN = REPO / "plugins" / "dw-harness"
+TEMPLATE = REPO / "template"
+MARKETPLACE = REPO / ".claude-plugin" / "marketplace.json"
+
+SKIP_COPY = {"__pycache__", "*.pyc", ".DS_Store"}
+
+TEXT_SUFFIXES = {".py", ".md", ".json", ".tmpl", ".yml", ".yaml", ".txt", ".ps1", ".sh"}
+
+
+def version() -> str:
+    for line in (SRC / "dw_core" / "__init__.py").read_text(encoding="utf-8").splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise SystemExit("cannot read dw_core.__version__")
+
+
+def hook_config() -> Dict:
+    return json.loads((SRC / "hooks.config.json").read_text(encoding="utf-8"))
+
+
+def _write_bytes_deterministic(path: Path, data: bytes) -> None:
+    """Write with platform-independent bytes: text content always LF."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def _copy_deterministic(src: Path, dst: Path) -> None:
+    data = src.read_bytes()
+    if src.suffix.lower() in TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n")
+    _write_bytes_deterministic(dst, data)
+
+
+def copy_tree(src: Path, dst: Path) -> None:
+    if not src.is_dir():
+        return
+    for item in sorted(src.rglob("*")):
+        if any(part == "__pycache__" for part in item.parts):
+            continue
+        if item.suffix == ".pyc":
+            continue
+        rel = item.relative_to(src)
+        target = dst / rel
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+        else:
+            _copy_deterministic(item, target)
+
+
+def plugin_hook_entry(event: str, block: Dict) -> Dict:
+    hook = {"type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/" + block["script"]],
+            "timeout": block.get("timeout", 30)}
+    if "onFailure" in block:
+        hook["onFailure"] = block["onFailure"]
+    entry = {"matcher": block["matcher"]} if block.get("matcher") else {}
+    entry["hooks"] = [hook]
+    return entry
+
+
+def template_hook_entry(block: Dict) -> Dict:
+    hook = {"type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/" + block["script"]],
+            "timeout": block.get("timeout", 30)}
+    if "onFailure" in block:
+        hook["onFailure"] = block["onFailure"]
+    entry = {"matcher": block["matcher"]} if block.get("matcher") else {}
+    entry["hooks"] = [hook]
+    return entry
+
+
+def write_json(path: Path, data: Dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+PLUGIN_README = """# dw-harness plugin
+
+Hooks resolve Python 3.9+ as `python` on PATH. Activate the intended Python
+environment before launching Claude Code. The copy template also accepts a
+custom interpreter via `dw init --python`.
+
+Hooks: PreToolUse guards (fail-closed: onFailure block + in-script deny
+fallback), PostToolUse SQL write-after feedback, SessionStart state card,
+PostCompact local capture, SessionEnd handoff. Out-of-band SQL changes are
+covered by `dw lint --changed` in CI instead of a file watcher.
+Skills: the 8-step workflow plus bootstrap / contract / check / next / review
+/ backfill and an auto-loaded SQL reference. Agents: dw-explorer,
+sql-validator, data-quality-checker, data-comparator (model: inherit; plugin
+agents ignore permissionMode by design).
+
+The bundled stdio MCP server (mcp/server.py) is deliberately NOT registered:
+dw-harness MCP stays off until you opt in (see docs/mcp.md; template installs
+use `dw init --mcp`).
+
+Project-side files (AGENTS.md, rules, harness.json, contracts) are generated
+by the `dw-bootstrap` skill / `dw init` — they are intentionally NOT shipped
+by the plugin. Requires Claude Code >= 2.1.295 for hook onFailure.
+"""
+
+
+def build(target_root: Path) -> List[str]:
+    """Generate everything under target_root (REPO for real, temp for check)."""
+    actions: List[str] = []
+    ver = version()
+    cfg = hook_config()
+
+    plugin = target_root / "plugins" / "dw-harness"
+    if plugin.exists():
+        shutil.rmtree(plugin)
+    (plugin / ".claude-plugin").mkdir(parents=True)
+    write_json(plugin / ".claude-plugin" / "plugin.json", {
+        "name": "dw-harness",
+        "version": ver,
+        "description": "Data warehouse AI engineering layer: guards, contracts, "
+                       "reconciliation and the 8-step workflow for MaxCompute -> StarRocks.",
+        "author": {"name": "pugyy"},
+    })
+    hooks_json = {event: [plugin_hook_entry(event, b) for b in blocks]
+                  for event, blocks in cfg["hooks"].items()}
+    write_json(plugin / "hooks" / "hooks.json", {"hooks": hooks_json})
+    copy_tree(SRC / "hooks", plugin / "hooks")
+    copy_tree(SRC / "dw_core", plugin / "dw_core")  # includes data/dialects packs
+    copy_tree(SRC / "skills", plugin / "skills")
+    copy_tree(SRC / "agents", plugin / "agents")
+    copy_tree(SRC / "output-styles", plugin / "output-styles")
+    copy_tree(REPO / "mcp", plugin / "mcp")
+    _write_bytes_deterministic(plugin / "README.md",
+                               PLUGIN_README.replace("\r\n", "\n").encode("utf-8"))
+    actions.append("plugins/dw-harness rebuilt")
+
+    template = target_root / "template"
+    if template.exists():
+        shutil.rmtree(template)
+    settings = {"hooks": {event: [template_hook_entry(b) for b in blocks]
+                          for event, blocks in cfg["hooks"].items()}}
+    write_json(template / ".claude" / "settings.json", settings)
+    copy_tree(SRC / "hooks", template / ".claude" / "hooks")
+    copy_tree(SRC / "dw_core", template / ".claude" / "dw_core")  # includes data/dialects
+    copy_tree(SRC / "skills", template / ".claude" / "skills")
+    copy_tree(SRC / "agents", template / ".claude" / "agents")
+    copy_tree(SRC / "output-styles", template / ".claude" / "output-styles")
+    scaffold = SRC / "scaffold"
+    _copy_deterministic(scaffold / "CLAUDE.md", template / "CLAUDE.md")
+    _copy_deterministic(scaffold / "AGENTS.md", template / "AGENTS.md")
+    copy_tree(scaffold / "rules", template / ".claude" / "rules")
+    (template / ".claude" / "dw").mkdir(parents=True, exist_ok=True)
+    _copy_deterministic(scaffold / "harness.json", template / ".claude" / "dw" / "harness.json")
+    _copy_deterministic(scaffold / "state.json", template / ".claude" / "dw" / "state.json")
+    _copy_deterministic(scaffold / "v1_hashes.json", template / ".claude" / "dw" / "v1_hashes.json")
+    _copy_deterministic(scaffold / "policy_exceptions.json",
+                        template / ".claude" / "dw" / "policy_exceptions.json")
+    (template / ".claude" / "dw" / "mcp").mkdir(parents=True, exist_ok=True)
+    _copy_deterministic(REPO / "mcp" / "server.py",
+                        template / ".claude" / "dw" / "mcp" / "server.py")
+    (template / "contracts").mkdir(parents=True, exist_ok=True)
+    _copy_deterministic(scaffold / "contract.example.json",
+                        template / "contracts" / "contract.example.json")
+    actions.append("template/ rebuilt (copy-mode install, original command names)")
+
+    write_json(target_root / ".claude-plugin" / "marketplace.json", {
+        "name": "dw-harness",
+        "description": "Warehouse change checks for MaxCompute and StarRocks.",
+        "owner": {"name": "pugyy"},
+        "plugins": [{
+            "name": "dw-harness",
+            "source": "./plugins/dw-harness",
+            "description": "Data warehouse AI engineering layer (guards, contracts, "
+                           "reconciliation, 8-step workflow)",
+            "version": ver,
+            "category": "data",
+        }],
+    })
+    actions.append("marketplace.json written")
+    return actions
+
+
+def trees_equal(a: Path, b: Path) -> List[str]:
+    diffs: List[str] = []
+
+    def files(root: Path):
+        return {p.relative_to(root).as_posix(): p for p in root.rglob("*")
+                if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"}
+
+    sa, sb = files(a), files(b)
+    for key in sorted(set(sa) | set(sb)):
+        if key not in sa:
+            diffs.append(f"extra in build: {key}")
+        elif key not in sb:
+            diffs.append(f"missing from build: {key}")
+        elif sa[key].read_bytes() != sb[key].read_bytes():
+            diffs.append(f"content drift: {key}")
+    return diffs
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="build")
+    parser.add_argument("--check", action="store_true",
+                        help="verify committed artifacts match src/ (CI drift gate)")
+    args = parser.parse_args(argv)
+    if not args.check:
+        for action in build(REPO):
+            print(action)
+        return 0
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = Path(tmp)
+        build(expected)
+        diffs: List[str] = []
+        for generated in ("plugins", "template", ".claude-plugin"):
+            live = REPO / generated
+            want = expected / generated
+            if not live.exists():
+                diffs.append(f"missing artifact dir: {generated}/")
+                continue
+            diffs.extend(trees_equal(want, live))
+    if diffs:
+        print("BUILD DRIFT DETECTED — regenerate with `python scripts/build.py`:")
+        for d in diffs[:40]:
+            print("  " + d)
+        return 1
+    print("build --check: clean (plugins/, template/, marketplace match src/)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

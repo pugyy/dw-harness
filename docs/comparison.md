@@ -1,3 +1,6 @@
+> **v2 更新（2026-11-16）**：对比表中的「compact 后丢上下文」已被官方行为（项目根 CLAUDE.md compact 后自动重读）与本仓 SessionStart 状态卡共同覆盖；
+> 新增维度「改没改对靠感觉 → 契约 + dw check 四态验收 + dw reconcile 键级对账」见 README。
+
 # 传统方式 vs Harness / Conventional Approach vs. Harness
 
 ## 核心对比 / Core Comparison

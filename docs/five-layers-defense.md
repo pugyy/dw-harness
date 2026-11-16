@@ -1,3 +1,6 @@
+> **v2 更新（2026-11-16）**：五层防线已升级为六层（新增「证据链」层：输入摘要绑定，变化即 UNVERIFIED）。
+> 现行定义见 README「六层防线」；PostCompact 事件只落盘、hookEventName 契约等修正见 CHANGELOG。
+
 # 五层防御体系 / Five Layers of Defense
 
 核心思路：把容易被 AI 忘掉的东西写进文件，把必须执行的检查写进 hook，把高 token 工作交给 subagent。

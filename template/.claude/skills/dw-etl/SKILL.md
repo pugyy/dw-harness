@@ -1,62 +1,41 @@
 ---
 name: dw-etl
-description: 数仓 ETL 开发流程，适用于生成 ODPS/MaxCompute 建表 DDL、INSERT SQL 和 SR 建表语句，并配合 hooks 自动校验 SQL 规范。直接调用命令：/dw-etl。
+description: >
+  Step 3/8 数仓 ETL 开发：生成 MaxCompute 建表 DDL、INSERT SQL，
+  并由 hook 做写后规范反馈。适用于契约定稿后开始写表和任务 SQL。
+argument-hint: "[表名] [分区日期]"
+allowed-tools: Read, Write, Edit, Bash(dw lint:*)
 ---
 
 # Step 3: ETL 开发
 
 ## 执行流程
 
-1. 根据技术设计生成建表 DDL
-2. 生成 Insert SQL
-3. 生成 SR 建表语句（如需）
-4. PostToolUse hook 自动触发 SQL 规范检查
+1. 按契约生成 `ddl_[表名].sql`（字段/类型/注释与契约一致）
+2. 生成 `insert_[表名].sql`（OVERWRITE + 显式 PARTITION）
+3. 写文件后 PostToolUse hook 自动给出规范反馈（写后反馈，非拦截）
+4. 自查一把确定性校验：
 
-## 产出文件
-
-| 文件名 | 用途 |
-|--------|------|
-| `ddl_[表名].sql` | ODPS 建表语句 |
-| `insert_[表名].sql` | Insert SQL |
-| `ddl_sr_[表名].sql` | SR 建表语句 |
-
-## 强制规范
-
-- INSERT 用 OVERWRITE 模式
-- PARTITION 子句必须包含 partition_dt
-- 金额字段类型 DECIMAL(20,4)
-- 禁止 SELECT *
-- 金额字段单位继承上游（如千元），不做转换
-- 注释三段式：业务含义 + 数据来源 + 计算逻辑
-
-## DDL 模板
-
-```sql
-CREATE TABLE IF NOT EXISTS [表名] (
-    [字段名] [类型] COMMENT '[业务含义|数据来源|计算逻辑]',
-    ...
-    partition_dt STRING COMMENT '分区日期|系统生成|yyyyMMdd格式'
-)
-PARTITIONED BY (partition_dt STRING)
-COMMENT '[表注释]'
-LIFECYCLE [天数];
+```bash
+dw lint ddl_[表名].sql insert_[表名].sql
 ```
 
-## Insert 模板
+## 模板
 
 ```sql
-INSERT OVERWRITE TABLE [表名] PARTITION (partition_dt = '[日期]')
-SELECT
-    [字段列表]
-FROM [来源表]
-WHERE partition_dt = '[日期]'
-[AND 其他条件];
+INSERT OVERWRITE TABLE [表] PARTITION (partition_dt = '[yyyyMMdd]')
+SELECT [显式字段列表]
+FROM [上游]
+WHERE partition_dt = '[yyyyMMdd]';
 ```
 
-## 自动护栏
+## 强制规范（hook 复核）
 
-写入 .sql 文件后，PostToolUse hook 自动检查：
-- 发现 SELECT * → exit 2 阻断
-- 缺少 PARTITION → exit 2 阻断
-- 金额字段用 DOUBLE → exit 2 阻断
-- Claude 收到 stderr 错误信息后自动修正
+- 禁 `SELECT *` / `t.*`（`COUNT(*)` 例外）
+- INSERT 必须带 PARTITION；金额 `DECIMAL(20,4)` 禁 `DOUBLE`
+- 注释三段式：业务含义 | 数据来源 | 计算逻辑
+- 金额单位继承契约声明，不做隐式换算
+
+## 交付物
+
+`ddl_[表名].sql`、`insert_[表名].sql`（如需同步：`ddl_sr_[表名].sql` 留给 Step 6）

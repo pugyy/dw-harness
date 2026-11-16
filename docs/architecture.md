@@ -1,3 +1,6 @@
+> **v2 更新（2026-11-16）**：本文件描述的 v1 结构已升级为 `src/` 单一真源 + build 生成 `plugins/` 与 `template/`。
+> 现行架构见 README「架构一览」与 CHANGELOG 2.0.0；本文件保留作为 v1 设计背景。
+
 # 架构设计 / Architecture
 
 ## 总览 / Overview

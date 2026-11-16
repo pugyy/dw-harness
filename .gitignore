@@ -34,3 +34,14 @@ venv/
 # Claude local/session outputs
 .claude/settings.local.json
 **/.claude/context/last_compact_summary.md
+
+# v2 build/runtime artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+examples/demo/report/
+
+# local scanner artifacts
+.mimosa/

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "dialect": {"default": "odps", "by_path": {"**/*_sr_*.sql": "starrocks"}},
+  "rules": {},
+  "protected_objects": ["db_a.dwd_trade_order_detail"],
+  "guard": {
+    "destructive": "deny",
+    "overwrite_without_partition": "ask",
+    "future_partition": "ask",
+    "unknown_write": "ask"
+  },
+  "pii": {"enabled": true, "scan_globs": ["**/*.sql", "**/*.csv"], "patterns": ["cn_phone", "cn_id_card", "bank_card"], "action": "warn"},
+  "evidence": {"freshness_hours": 72}
+}

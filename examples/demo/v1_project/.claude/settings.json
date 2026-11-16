@@ -1,0 +1,35 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "echo v1-status-line"
+  },
+  "permissions": {
+    "allow": ["Bash(git diff:*)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {"type": "command", "command": "python .claude/hooks/validate_sql.py", "timeout": 60}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {"type": "command", "command": "python .claude/hooks/block_dangerous_ddl.py", "timeout": 10}
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {"type": "command", "command": "python .claude/hooks/inject_context.py", "timeout": 10}
+        ]
+      }
+    ]
+  }
+}

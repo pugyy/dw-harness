@@ -1,52 +1,33 @@
 ---
 name: dw-technical-design
-description: 数仓技术设计流程，适用于 OneData 建模、表名粒度设计、分区主键设计和字段类型约束沉淀。直接调用命令：/dw-technical-design。
+description: >
+  Step 2/8 数仓技术设计：OneData 建模、表名粒度/主键/分区设计、
+  字段类型约束沉淀到表契约。适用于需求分析完成后进入建模阶段。
+argument-hint: "[表名或主题]"
+allowed-tools: Read, Grep, Glob, Write, Bash(dw contract:*)
 ---
 
 # Step 2: 技术设计
 
 ## 执行流程
 
-1. 基于 OneData 规范进行建模设计
-2. 确定表名、分区、主键
-3. 明确字段类型和特殊约束
+1. OneData 命名：`[层级]_[域]_[主题]_[粒度]_[周期]`（如 `dws_trade_order_di`）
+2. 确定主键、粒度、分区（`partition_dt string yyyyMMdd`）
+3. 把 Step 1 的口径草稿固化进契约并校验：
 
-## OneData 命名规范
-
-- 表名格式: `[层级]_[域]_[主题]_[粒度]_[周期]`
-- 例: `dws_trade_order_di` (汇总层_交易域_订单主题_明细_日增量)
-- 分区字段: `partition_dt string (格式 yyyyMMdd)`
-
-## 输出格式
-
-```markdown
-## 技术设计决策
-
-### 基本信息
-- 表名: [按 OneData 规范命名]
-- 层级: [ODS/DWD/DWS/ADS]
-- 主键: [字段组合]
-- 粒度: [数据粒度说明]
-- 周期: [全量/增量]
-
-### 字段设计
-| 字段名 | 类型 | 说明 | 数据来源 |
-|--------|------|------|---------|
-| ...    | ...  | ...  | ...     |
-
-### 特殊约束
-- [约束 1]
-- [约束 2]
-
-### 上游依赖
-| 来源表 | 关联方式 | 说明 |
-|--------|---------|------|
-| ...    | ...     | ...  |
+```bash
+dw contract validate contracts/contract.json
+dw contract compile contracts/contract.json
 ```
+
+4. 金额列在契约中分开声明 `currency` 与 `unit`（CNY 的分/元/千元是三种不同契约事实）
+
+## 交付物
+
+- `02_design.md`：建模决策（表/主键/粒度/分区/上游依赖）
+- 通过校验的契约 + 编译产物 `.contract.json`
 
 ## 规则
 
-- 输出不超过 60 行
-- 表名必须符合 OneData 命名规范
-- 禁止修改的表必须在约束中标注
-- 技术设计决策写入 CLAUDE.md
+- 输出 ≤60 行；细节写契约，不写会话
+- 禁改表必须登记到 `harness.json` 的 `protected_objects`

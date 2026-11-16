@@ -1,0 +1,48 @@
+name: Plugin validate (trusted env)
+
+# Real validation: installs the Claude Code CLI and authenticates with the
+# CLAUDE_CODE_OAUTH_TOKEN secret. Fails loudly when the secret is missing —
+# a skipped validation must never look like a green one (audit R5).
+# Alternative: runs-on: [self-hosted, claude] with the CLI preinstalled.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require claude auth secret
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error::CLAUDE_CODE_OAUTH_TOKEN secret is required for real plugin validation"
+            exit 1
+          fi
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate plugin and Marketplace manifests
+        run: |
+          claude plugin marketplace add .
+          claude plugin validate .
+          claude plugin validate ./plugins/dw-harness
+
+      - name: Assert real startup, lint feedback and Bash guard
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: python scripts/check_plugin_live.py ./plugins/dw-harness --with-model
+
+      - name: Plugin eval (account-scoped, informational)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: claude plugin eval dw-harness || echo "::warning::plugin eval reported issues (informational)"

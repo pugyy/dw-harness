@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dw-harness"
+version = "2.0.0"
+description = "Data warehouse AI engineering layer: SQL guards, table contracts, key-level reconciliation and the 8-step workflow (MaxCompute -> StarRocks)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "pugyy" }]
+keywords = ["data-warehouse", "maxcompute", "starrocks", "claude-code", "sql-lint"]
+classifiers = [
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+]
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=5.4"]
+deep = ["sqlglot>=20.0"]
+odps = ["pyodps>=0.11"]
+sr = ["pymysql>=1.0"]
+test = ["PyYAML>=5.4"]
+
+[project.scripts]
+dw = "dw_core.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dw_core*"]
+
+[tool.setuptools.package-data]
+dw_core = ["py.typed", "data/dialects/*.json"]

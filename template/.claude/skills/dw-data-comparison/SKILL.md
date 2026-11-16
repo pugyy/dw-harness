@@ -1,39 +1,35 @@
 ---
 name: dw-data-comparison
-description: 数仓数据比对流程，适用于新旧表、上下游表、核心金额字段和指标口径差异分析。直接调用命令：/dw-data-comparison。
+description: >
+  Step 5/8 数据比对：新旧表/上下游键级对账，产出可复跑的对账证据，
+  只回收差异摘要。适用于自测通过后与基线数据核对。
+argument-hint: "[表名] [分区日期] [基线表]"
+context: fork
+agent: dw-harness:data-comparator
+allowed-tools: Read, Grep, Glob, Bash(dw reconcile:*), Bash(dw check:*)
 ---
 
-# Step 5: 数据比对
+# Step 5: 数据比对（键级对账）
 
 ## 执行流程
 
-1. 调用 `data-comparator` subagent 进行新旧表数据对比
-2. subagent 在独立 context 运行，只返回差异超过容差的字段
-3. 主对话只接收差异摘要
+1. 固定比较双方：表/分区/业务键/度量列/容差（单位换算按契约）
+2. 跑确定性对账并存证据：
 
-## 推荐提示词
-
-```
-用 data-comparator subagent 对比数据：
-- 新表: [表名], partition_dt = '[日期]'
-- 参考表: [表名], partition_dt = '[日期]'
-- 比对字段: [核心金额字段列表]
-- 容差: ≤ 0.01%（金额类）
-只返回差异超过容差的字段列表及差值。
+```bash
+dw reconcile --spec reconcile_[表].json --save-evidence
 ```
 
-## 比对参数
+3. 预检（空键/重复键/缺失分区）失败先修数，再做键级比较
+4. 只把差异摘要交回主对话
 
-| 字段类型 | 容差 |
-|---------|------|
-| 金额类 | ≤ 0.01% |
-| 数量类 | ≤ 0.1% |
-| 字符串类 | 精确匹配 |
+## 对账 spec 要点
 
-## 输出
+- `keys`：业务键（契约 `business_keys`）
+- `metrics`：列 + `abs_tol` + `rel_tol` + 双方 `unit`（按契约换算到最小单位）
+- 零基线：一侧为 0 时任何非零差都算 FAIL；NULL==NULL 视为相等，NULL vs 值单列
 
-由 data-comparator subagent 返回：
-- 字段级差异列表
-- 差异率
-- 差值说明
-- 结论（通过/需关注）
+## 交付物
+
+- `reconcile_[表].json`（spec，进仓库）
+- `.claude/dw/evidence/reconcile-[表].json`（证据，`dw check` 复核）
