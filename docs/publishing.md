@@ -67,7 +67,7 @@ Never commit the token. If you use the token path in CI, store it as a repositor
 
 ## Published
 
-`dw-harness` 2.0.0 is published on PyPI (sdist and wheel). For later versions:
+`dw-harness` 2.0.1 is published on PyPI (sdist and wheel). For later versions:
 
 - bump `version` in `pyproject.toml` and add the matching `CHANGELOG.md` entry;
 - publish a GitHub Release, or run the workflow manually;
