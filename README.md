@@ -6,6 +6,7 @@
 ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)
 [![Tests](https://github.com/pugyy/dw-harness/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/pugyy/dw-harness/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/pugyy/dw-harness)](https://github.com/pugyy/dw-harness/releases)
+[![PyPI](https://img.shields.io/pypi/v/dw-harness)](https://pypi.org/project/dw-harness/)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://github.com/pugyy/dw-harness#install)
 
 <a id="中文"></a>
@@ -22,7 +23,7 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 
 适合使用 Claude Code 的数仓/数据平台团队，尤其是已经在 MaxCompute、StarRocks、Hive 或 Spark 上做 ETL，并希望把 AI 产出纳入 review 和 CI 的团队。它不替代调度系统、元数据平台或 BI 工具，也不是一个只做 SQL 格式化的插件。
 
-> **当前状态**：v2.0.0 已发布；123 个测试和 6/6 CI 矩阵通过；真实 MaxCompute/StarRocks/DataWorks 适配器未连生产实例，`plugin-validate` 需要 secret 手动触发。未验证项和复现步骤见 [docs/e2e-demo.md](docs/e2e-demo.md)。
+> **当前状态**：v2.0.0 已发布到 PyPI 和 GitHub Release；123 个测试和 6/6 CI 矩阵通过；真实 MaxCompute/StarRocks/DataWorks 适配器未连生产实例，`plugin-validate` 需要 secret 手动触发。未验证项和复现步骤见 [docs/e2e-demo.md](docs/e2e-demo.md)。
 
 ### 目录
 
@@ -111,7 +112,7 @@ https://github.com/pugyy/dw-harness
 3. 选择安装路径：
    A. 有 Claude Code：依次执行 /plugin marketplace add pugyy/dw-harness、/plugin install dw-harness@dw-harness、/dw-harness:dw-bootstrap。
    B. 没有 Claude Code 或需要离线：
-      python -m pip install "dw-harness[yaml,deep] @ git+https://github.com/pugyy/dw-harness.git"
+      python -m pip install "dw-harness[yaml,deep]"
       （离线：git clone https://github.com/pugyy/dw-harness.git /tmp/dw-harness && (cd /tmp/dw-harness && python -m pip install -e ".[yaml,deep]")）
       然后先 dw init --target . --python python --dry-run，确认输出后再 dw init --target . --python python。
 4. 不要覆盖已有的 settings.json、skills、rules、agents、statusLine。遇到冲突先停下，列出文件、冲突原因和建议，不要自行删除。
@@ -190,7 +191,7 @@ python scripts/run_demo.py        # 无凭据、无数据库、无 Claude Code �
 
 ### 安装
 
-PyPI 尚未发布；CLI 从源码安装。
+PyPI 已发布 v2.0.0；CLI 可从 PyPI、源码或 Release wheel 安装。
 
 #### 1. Claude Code 插件（主路径，命令带 `dw-harness:` 前缀）
 
@@ -213,8 +214,13 @@ claude --plugin-dir ./dw-harness/plugins/dw-harness
 #### 3. CLI（CI 或无 Claude Code）
 
 ```bash
-# 直接从 Git 安装（PyPI 尚未发布）
-pip install "dw-harness[test] @ git+https://github.com/pugyy/dw-harness.git"
+# 从 PyPI 安装
+pip install "dw-harness[test]"
+
+# 或从源码安装
+git clone https://github.com/pugyy/dw-harness.git
+cd dw-harness
+pip install -e ".[test]"
 
 # 或使用 v2.0.0 Release 中的 wheel
 pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
@@ -361,7 +367,7 @@ dw-harness is a Claude Code plugin and CLI for data warehouse teams. It packages
 
 It is built for warehouse and data-platform teams already using Claude Code, especially those running ETL on MaxCompute, StarRocks, Hive or Spark and wanting AI output to pass review and CI. It does not replace a scheduler, metadata platform or BI tool, and it is not a SQL formatter.
 
-> **Status**: v2.0.0 is released; 123 tests and the 6/6 CI matrix pass. The live MaxCompute/StarRocks/DataWorks adapters have not been tested against production, and `plugin-validate` needs a secret and a manual dispatch. Unverified items and reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
+> **Status**: v2.0.0 is published on PyPI and GitHub Releases; 123 tests and the 6/6 CI matrix pass. The live MaxCompute/StarRocks/DataWorks adapters have not been tested against production, and `plugin-validate` needs a secret and a manual dispatch. Unverified items and reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
 
 ### Contents
 
@@ -450,7 +456,7 @@ Do this in order:
 3. Choose an install path:
    A. Claude Code: run /plugin marketplace add pugyy/dw-harness, /plugin install dw-harness@dw-harness, then /dw-harness:dw-bootstrap.
    B. No Claude Code or offline:
-      python -m pip install "dw-harness[yaml,deep] @ git+https://github.com/pugyy/dw-harness.git"
+      python -m pip install "dw-harness[yaml,deep]"
       (offline: git clone https://github.com/pugyy/dw-harness.git /tmp/dw-harness && (cd /tmp/dw-harness && python -m pip install -e ".[yaml,deep]"))
       Then run dw init --target . --python python --dry-run, review it, then run dw init --target . --python python.
 4. Do not overwrite existing settings.json, skills, rules, agents or statusLine. On conflict, stop and list the files, the reason and a recommendation. Do not delete anything.
@@ -529,7 +535,7 @@ The demo runs 20 acceptance cases, including counter-examples:
 
 ### Install
 
-The package is not on PyPI. Install the CLI from source.
+dw-harness v2.0.0 is published on PyPI. Install the CLI from PyPI, source, or the release wheel.
 
 #### 1. Claude Code plugin (recommended)
 
@@ -552,8 +558,13 @@ The `plugin-validate` workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` secret; without
 #### 3. CLI (CI or no Claude Code)
 
 ```bash
-# Install directly from Git (PyPI is not published yet)
-pip install "dw-harness[test] @ git+https://github.com/pugyy/dw-harness.git"
+# Install from PyPI
+pip install "dw-harness[test]"
+
+# Or from source
+git clone https://github.com/pugyy/dw-harness.git
+cd dw-harness
+pip install -e ".[test]"
 
 # Or use the wheel attached to the v2.0.0 release
 pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl

@@ -172,7 +172,7 @@ dw contract compile contracts/<表>.json
 - `plugin-validate` 需要 `CLAUDE_CODE_OAUTH_TOKEN` 并手动触发，发布时未跑。
 - MaxCompute、StarRocks、DataWorks 适配器代码就绪，未连真实实例；`docs/e2e-demo.md` 有复现步骤。
 - 插件 Hook 要求 PATH 上有 `python`；只有 `python3` 的环境需要先处理解释器。
-- PyPI 尚未发布，CLI 从仓库安装。
+- PyPI 已发布 `dw-harness` 2.0.0；CLI 可从 PyPI 安装。
 - v1 没有证据链，因此没有 `dw-evidence/2` 历史数据需要迁移。
 
 ## 回滚

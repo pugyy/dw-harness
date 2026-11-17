@@ -2,6 +2,8 @@
 
 This repository is set up for PyPI Trusted Publishing. The workflow builds an sdist and wheel, runs `twine check`, then publishes with OIDC. No API token is stored in the repository.
 
+`dw-harness` 2.0.0 is published: <https://pypi.org/project/dw-harness/>.
+
 ## One-time setup on PyPI
 
 Create a pending publisher at <https://pypi.org/manage/account/publishing/> with:
@@ -61,13 +63,13 @@ TWINE_USERNAME=__token__ TWINE_PASSWORD=... python -m twine upload dist/*
 
 Never commit the token. If you use the token path in CI, store it as a repository secret and pass it only to the upload step.
 
-## After the first publish
+## Published
 
-Once `dw-harness` exists on PyPI:
+`dw-harness` 2.0.0 is published on PyPI (sdist and wheel). For later versions:
 
-- update README install commands from the Git URL to `pip install "dw-harness[...]"`;
-- update the AI install prompt in `README.md`;
-- remove the “PyPI 尚未发布” / “not on PyPI” notes from `README.md`, `docs/e2e-demo.md`, `docs/support-matrix.md`, `docs/configuration.md` and `docs/upgrade-from-v1.md`;
+- bump `version` in `pyproject.toml` and add the matching `CHANGELOG.md` entry;
+- publish a GitHub Release, or run the workflow manually;
+- update README/docs only if the install command, extras or compatibility change;
 - keep the source/Git install path as a fallback for unreleased commits.
 
 Do not change the version in `pyproject.toml` for a publish-only change; bump it when the package contents change.

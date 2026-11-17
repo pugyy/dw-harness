@@ -170,7 +170,7 @@ The next `dw check` uses the new contract. Breaking field changes still require 
 - `plugin-validate` requires `CLAUDE_CODE_OAUTH_TOKEN` and a manual dispatch; it was not run for the release.
 - MaxCompute, StarRocks and DataWorks adapters are code-complete but have not been tested against live instances. Reproduction steps are in `docs/e2e-demo.md`.
 - Plugin hooks require `python` on PATH. Environments with only `python3` need an interpreter shim or a template install.
-- The package is not on PyPI; install the CLI from the repository.
+- `dw-harness` 2.0.0 is published on PyPI; install the CLI from there.
 - v1 had no evidence chain, so there is no `dw-evidence/2` history to migrate.
 
 ## Rollback
