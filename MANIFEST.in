@@ -3,4 +3,6 @@ graft tests
 graft docs
 graft examples
 graft contracts
-global-exclude __pycache__ *.py[cod]
+prune examples/demo/report
+prune .mimosa
+global-exclude __pycache__ *.py[cod] *.bak-* .DS_Store
