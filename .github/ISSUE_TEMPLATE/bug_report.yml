@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible problem with dw-harness
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please include a minimal reproduction; issues without one are hard to act on.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: A short description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Commands, SQL, contract/spec files, or a minimal repository.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include the command output and exit code.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: dw-harness version
+      placeholder: "v2.0.0 / commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "OS, Python, Claude Code version, dialect (odps/hive/spark/starrocks)"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues before opening this one.
+          required: true
+        - label: I removed credentials and customer data from logs and fixtures.
+          required: true

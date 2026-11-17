@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/pugyy/dw-harness/tree/main/docs
+    about: Installation, configuration, reconciliation and acceptance docs.
+  - name: Migration from v1
+    url: https://github.com/pugyy/dw-harness/blob/main/docs/upgrade-from-v1.md
+    about: Hook renames, command namespace changes and rollback.

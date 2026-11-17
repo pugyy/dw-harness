@@ -1,0 +1,73 @@
+# Publishing dw-harness
+
+This repository is set up for PyPI Trusted Publishing. The workflow builds an sdist and wheel, runs `twine check`, then publishes with OIDC. No API token is stored in the repository.
+
+## One-time setup on PyPI
+
+Create a pending publisher at <https://pypi.org/manage/account/publishing/> with:
+
+| Field | Value |
+|---|---|
+| PyPI project name | `dw-harness` |
+| Owner | `pugyy` |
+| Repository | `dw-harness` |
+| Workflow name | `publish.yml` |
+| Environment | leave empty |
+
+The first successful publish claims the project name. After that, the same publisher is used for later releases.
+
+## Publish a release
+
+1. Merge the release commit to `main`.
+2. Create a GitHub Release (for example `v2.0.0`) and publish it.
+3. `.github/workflows/publish.yml` builds `dist/` and publishes both the sdist and wheel.
+4. Verify:
+
+```bash
+pip index versions dw-harness
+python -m pip install "dw-harness[yaml,deep]"
+dw --version
+```
+
+You can also run the workflow manually from **Actions → Publish to PyPI → Run workflow**; it builds and publishes the current `main`.
+
+## TestPyPI
+
+To rehearse, add a second pending publisher for TestPyPI and a separate workflow input or job with:
+
+```yaml
+uses: pypa/gh-action-pypi-publish@release/v1
+with:
+  repository-url: https://test.pypi.org/legacy/
+```
+
+Install from TestPyPI with the extra index:
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ "dw-harness[yaml,deep]"
+```
+
+## Token fallback
+
+If OIDC is not available, create a PyPI API token and upload manually:
+
+```bash
+python -m pip install build twine
+python -m build
+python -m twine check dist/*
+TWINE_USERNAME=__token__ TWINE_PASSWORD=... python -m twine upload dist/*
+```
+
+Never commit the token. If you use the token path in CI, store it as a repository secret and pass it only to the upload step.
+
+## After the first publish
+
+Once `dw-harness` exists on PyPI:
+
+- update README install commands from the Git URL to `pip install "dw-harness[...]"`;
+- update the AI install prompt in `README.md`;
+- remove the “PyPI 尚未发布” / “not on PyPI” notes from `README.md`, `docs/e2e-demo.md`, `docs/support-matrix.md`, `docs/configuration.md` and `docs/upgrade-from-v1.md`;
+- keep the source/Git install path as a fallback for unreleased commits.
+
+Do not change the version in `pyproject.toml` for a publish-only change; bump it when the package contents change.

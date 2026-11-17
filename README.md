@@ -326,6 +326,7 @@ dw evidence keygen
 - [docs/upgrade-from-v1.en.md](docs/upgrade-from-v1.en.md) — v1 → v2 migration guide (English)
 - [docs/e2e-demo.md](docs/e2e-demo.md) — 端到端验收与真实环境复现步骤
 - [docs/mcp.md](docs/mcp.md) — 本地 MCP server 注册与工具清单
+- [docs/publishing.md](docs/publishing.md) — PyPI Trusted Publishing 与发布流程
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 变更全录
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
 
@@ -660,6 +661,7 @@ Migration preserves `.claude`; `settings.json` and `CLAUDE.md` get `.bak-<timest
 - [docs/upgrade-from-v1.en.md](docs/upgrade-from-v1.en.md) — v1 → v2 migration guide (English)
 - [docs/e2e-demo.md](docs/e2e-demo.md) — end-to-end acceptance and live-environment steps
 - [docs/mcp.md](docs/mcp.md) — local MCP registration and tool list
+- [docs/publishing.md](docs/publishing.md) — PyPI Trusted Publishing and release process
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 changes
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
 

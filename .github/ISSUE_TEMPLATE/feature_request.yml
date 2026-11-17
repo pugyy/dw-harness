@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a capability or integration
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve? Describe the workflow, not only the proposed API.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should dw-harness do? Include commands, config, or expected output if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools, workarounds, or designs you have tried.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "MaxCompute / StarRocks / Hive / Spark, Claude Code or CLI, OS"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and docs before opening this one.
+          required: true

@@ -12,4 +12,6 @@
 - 文档双语：`README.md` 内含中文 / English 两段，`docs/upgrade-from-v1.md` /
   `docs/upgrade-from-v1.en.md` 各一份；改一份必须同步另一份，新增用户文档时给出
   中英两个入口并在 README 互链。
+- 发布：`publish.yml` 使用 PyPI Trusted Publishing（OIDC），流程见
+  `docs/publishing.md`；不要提交 token，也不要在 PR 里触发发布。
 - 提交信息用中英均可，说明"改了哪个层"（core / hooks / skills / build / docs）。

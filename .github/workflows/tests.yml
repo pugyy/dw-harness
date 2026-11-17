@@ -51,3 +51,10 @@ jobs:
         run: |
           python -m pip wheel --no-deps . -w dist
           python scripts/check_wheel_install.py dist/dw_harness-*-py3-none-any.whl
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dw-harness-wheel
+          path: dist/*.whl
+          if-no-files-found: error
