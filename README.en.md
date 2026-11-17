@@ -36,7 +36,6 @@ It is built for warehouse and data-platform teams already using Claude Code, esp
 - [Support](#support)
 - [FAQ](#faq)
 - [Documentation](#documentation)
-- [Keywords](#keywords)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -324,10 +323,6 @@ Migration preserves `.claude`; `settings.json` and `CLAUDE.md` get `.bak-<timest
 - [docs/mcp.md](docs/mcp.md) — local MCP registration and tool list
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 changes
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
-
-## Keywords
-
-Claude Code plugin, Claude Code skills, Claude Code hooks, data warehouse, MaxCompute, ODPS, StarRocks, Hive, Spark SQL, SQL lint, SQL conventions, table contract, data contract, data quality, key-level reconciliation, ETL, OneData, data engineering, AI coding, AI agent, MCP, Python.
 
 ## Contributing
 

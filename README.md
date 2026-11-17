@@ -36,7 +36,6 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 - [支持矩阵](#支持矩阵)
 - [FAQ](#faq)
 - [文档](#文档)
-- [关键词](#关键词)
 - [参与贡献](#参与贡献)
 - [License](#license)
 
@@ -325,10 +324,6 @@ dw evidence keygen
 - [docs/mcp.md](docs/mcp.md) — 本地 MCP server 注册与工具清单
 - [CHANGELOG.md](CHANGELOG.md) — v2.0.0 变更全录
 - [docs/architecture.md](docs/architecture.md) / [five-layers-defense.md](docs/five-layers-defense.md) / [eight-steps-workflow.md](docs/eight-steps-workflow.md)
-
-## 关键词
-
-Claude Code 插件、Claude Code plugin、Claude Code skills、Claude Code hooks、data warehouse、数据仓库、MaxCompute、ODPS、StarRocks、Hive、Spark SQL、SQL lint、SQL 规范、table contract、数据契约、data quality、数据质量、key-level reconciliation、键级对账、ETL、OneData、数据开发、AI coding、AI Agent、MCP、Python。
 
 ## 参与贡献
 
