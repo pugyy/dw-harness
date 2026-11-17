@@ -4,6 +4,8 @@ This repository is set up for PyPI Trusted Publishing. The workflow builds an sd
 
 `dw-harness` 2.0.0 is published: <https://pypi.org/project/dw-harness/>.
 
+The GitHub Release assets are the same files published to PyPI; verify them against the PyPI JSON metadata or `sha256sum` on the downloaded files. The wheel also carries `dw_core/data/template` so `dw init` works from a wheel without a separate checkout; that template includes its own `.claude/dw_core`, which is why the wheel contains two copies. This is intentional for the 2.0 line; a 2.0.1 packaging cleanup can move the template to one top-level data directory.
+
 ## One-time setup on PyPI
 
 Create a pending publisher at <https://pypi.org/manage/account/publishing/> with:

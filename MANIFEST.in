@@ -1,2 +1,6 @@
 graft template
+graft tests
+graft docs
+graft examples
+graft contracts
 global-exclude __pycache__ *.py[cod]

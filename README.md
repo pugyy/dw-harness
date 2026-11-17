@@ -222,7 +222,7 @@ git clone https://github.com/pugyy/dw-harness.git
 cd dw-harness
 pip install -e ".[test]"
 
-# 或使用 v2.0.0 Release 中的 wheel
+# 或使用与 PyPI 相同的 v2.0.0 wheel
 pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
 
 # 或 clone 后 editable 安装
@@ -566,7 +566,7 @@ git clone https://github.com/pugyy/dw-harness.git
 cd dw-harness
 pip install -e ".[test]"
 
-# Or use the wheel attached to the v2.0.0 release
+# Or use the same v2.0.0 wheel that was published to PyPI
 pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
 
 # Or clone and install editable
