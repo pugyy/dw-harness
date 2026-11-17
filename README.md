@@ -316,6 +316,9 @@ dw demo                                             # 离线端到端验收
 **没有 Claude Code 能用吗？**
 可以。`dw` CLI、`dw lint`、`dw contract`、`dw reconcile`、`dw check` 都不依赖 Claude Code；`dw demo` 也不需要数据库。
 
+**`dw doctor` 的 `!` 和 `!!` 是什么意思？**
+`!` 是非关键提示，例如真机接线尚未验证；`!!` 才是问题。退出码只看 critical 项，默认出现的 `app-wiring-verified` 是 `!`，不代表安装失败。
+
 **`dw check` 一直是 UNVERIFIED？**
 先看 `reconcile` 项：strict 模式需要 `DW_HARNESS_EVIDENCE_KEY`，没有 key 用 `--mode local`；再确认传了 `--contract`、`--sql`、`--ddl`、`--reconcile-spec`。如果分区或文件变化，旧证据会失效，需要重新 `dw reconcile --save-evidence`。
 
@@ -658,6 +661,9 @@ Use the plugin for automatic updates and less per-project maintenance; use the t
 
 **Can I use it without Claude Code?**
 Yes. `dw`, `dw lint`, `dw contract`, `dw reconcile` and `dw check` do not require Claude Code. `dw demo` does not require a database.
+
+**What do `!` and `!!` mean in `dw doctor`?**
+`!` is a non-critical note, such as live-app wiring not yet verified; `!!` is a problem. Only critical items affect the exit code, so the default `app-wiring-verified` line with `!` does not mean the install failed.
 
 **Why is `dw check` always UNVERIFIED?**
 Check the `reconcile` item first: strict mode needs `DW_HARNESS_EVIDENCE_KEY`; use `--mode local` without a key. Then confirm `--contract`, `--sql`, `--ddl` and `--reconcile-spec` are present. If a partition or file changed, the old evidence is stale; rerun `dw reconcile --save-evidence`.
