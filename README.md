@@ -23,7 +23,7 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 
 适合使用 Claude Code 的数仓/数据平台团队，尤其是已经在 MaxCompute、StarRocks、Hive 或 Spark 上做 ETL，并希望把 AI 产出纳入 review 和 CI 的团队。它不替代调度系统、元数据平台或 BI 工具，也不是一个只做 SQL 格式化的插件。
 
-> **当前状态**：v2.0.0 已发布到 PyPI 和 GitHub Release；123 个测试和 6/6 CI 矩阵通过；真实 MaxCompute/StarRocks/DataWorks 适配器未连生产实例，`plugin-validate` 需要 secret 手动触发。未验证项和复现步骤见 [docs/e2e-demo.md](docs/e2e-demo.md)。
+> **当前状态**：v2.0.1 已发布到 PyPI 和 GitHub Release；124 个测试和 6/6 CI 矩阵通过；真实 MaxCompute/StarRocks/DataWorks 适配器未连生产实例，`plugin-validate` 需要 secret 手动触发。未验证项和复现步骤见 [docs/e2e-demo.md](docs/e2e-demo.md)。
 
 ### 目录
 
@@ -50,6 +50,7 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 |---|---|---|
 | v1.0.0 | 2026-05-23 | 初始版本：复制模板、五层防线、3 个 Hook、8 个 Skill、4 个 Subagent |
 | v2.0.0 | 2026-11-16 | Evidence Gate：插件 + CLI、表契约、四态验收、键级对账、证据链 |
+| v2.0.1 | 2026-11-18 | PyPI 元数据刷新、sdist 补全、wheel 去除重复 template core |
 
 #### v1.0.0 — 2026-05-23 — 初始版本
 
@@ -98,12 +99,19 @@ dw-harness 是面向数仓团队的 Claude Code 插件与 CLI。它把表契约�
 - 路径级规则、SQL 规范、金额 `DECIMAL(20,4)`、`partition_dt` 约定
 - 自定义 Skill、规则、权限和状态栏：迁移只合并，不主动删除
 
+#### v2.0.1 — 2026-11-18 — PyPI 打包刷新
+
+- 刷新 PyPI 页面内嵌 README，移除发布前的“PyPI 尚未发布”旧文案
+- sdist 纳入 `docs/`、`tests/`、`examples/`、`contracts/`，并排除本地 `.mimosa` / report / 备份文件
+- wheel 不再复制 template 内的第二份 `dw_core`；`dw init` 从已安装包复制 core，功能路径不变
+- 保留 2.0.0 的命令、配置和验收语义；测试增至 124 个
+
 ### 让 AI Agent 帮你部署
 
 把下面这段直接发给有终端权限的 AI Agent（Claude Code、Codex、Cursor 或其他编码 Agent）。它覆盖环境检查、备份、插件/模板选择、项目文件生成和验收。Agent 遇到冲突时应停下，而不是自行删除你的配置。
 
 ```text
-你是一名资深数据平台工程师。请在我的数据仓库项目中安装并验收 dw-harness v2.0.0：
+你是一名资深数据平台工程师。请在我的数据仓库项目中安装并验收 dw-harness v2.0.1：
 https://github.com/pugyy/dw-harness
 
 执行顺序：
@@ -223,7 +231,7 @@ cd dw-harness
 pip install -e ".[test]"
 
 # 或使用与 PyPI 相同的 v2.0.0 wheel
-pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
+pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.1/dw_harness-2.0.1-py3-none-any.whl
 
 # 或 clone 后 editable 安装
 git clone https://github.com/pugyy/dw-harness.git
@@ -263,7 +271,7 @@ plugins/dw-harness/           # 生成物：插件安装单元
 template/                     # 生成物：复制式安装
 contracts/schema/             # 表契约 JSON Schema（ODCS 精简）
 examples/demo/                # 订单表端到端 fixtures + 反例 a-f
-tests/                        # 123 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
+tests/                        # 124 个测试：规则/守卫/契约/对账/证据/接线/迁移/manifest/CLI 端到端
 ```
 
 ### 六层防线（v1 五层升级）
@@ -370,7 +378,7 @@ dw-harness is a Claude Code plugin and CLI for data warehouse teams. It packages
 
 It is built for warehouse and data-platform teams already using Claude Code, especially those running ETL on MaxCompute, StarRocks, Hive or Spark and wanting AI output to pass review and CI. It does not replace a scheduler, metadata platform or BI tool, and it is not a SQL formatter.
 
-> **Status**: v2.0.0 is published on PyPI and GitHub Releases; 123 tests and the 6/6 CI matrix pass. The live MaxCompute/StarRocks/DataWorks adapters have not been tested against production, and `plugin-validate` needs a secret and a manual dispatch. Unverified items and reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
+> **Status**: v2.0.1 is published on PyPI and GitHub Releases; 124 tests and the 6/6 CI matrix pass. The live MaxCompute/StarRocks/DataWorks adapters have not been tested against production, and `plugin-validate` needs a secret and a manual dispatch. Unverified items and reproduction steps are in [docs/e2e-demo.md](docs/e2e-demo.md).
 
 ### Contents
 
@@ -397,6 +405,7 @@ It is built for warehouse and data-platform teams already using Claude Code, esp
 |---|---|---|
 | v1.0.0 | 2026-05-23 | Initial release: copy template, five layers, three hooks, eight skills, four subagents |
 | v2.0.0 | 2026-11-16 | Evidence Gate: plugin + CLI, table contracts, four-state acceptance, key-level reconciliation, evidence chain |
+| v2.0.1 | 2026-11-18 | PyPI metadata refresh, fuller sdist, remove duplicate template core from the wheel |
 
 #### v1.0.0 — 2026-05-23 — Initial release
 
@@ -445,12 +454,19 @@ The first public version, delivered as a copyable `.claude` template for data wa
 - Path-scoped rules, SQL conventions, `DECIMAL(20,4)` for money and the `partition_dt` convention
 - Custom skills, rules, permissions and status line entries: migration merges them and does not remove them
 
+#### v2.0.1 — 2026-11-18 — PyPI packaging refresh
+
+- Refresh the README embedded in the PyPI page and remove pre-release “not on PyPI” text
+- Include `docs/`, `tests/`, `examples/` and `contracts/` in the sdist, while excluding local `.mimosa`, report and backup files
+- Stop shipping a second `dw_core` inside the template in the wheel; `dw init` copies the installed core, with no change to the user-facing flow
+- Keep the 2.0.0 commands, configuration and acceptance semantics; test count is now 124
+
 ### Let an AI agent install it
 
 Paste the block below into an AI coding agent with terminal access (Claude Code, Codex, Cursor or similar). It covers environment checks, backup, plugin-or-template selection, project scaffolding and acceptance. The agent is told to stop on conflicts instead of deleting your configuration.
 
 ```text
-You are a senior data platform engineer. Install and validate dw-harness v2.0.0 in my data warehouse project:
+You are a senior data platform engineer. Install and validate dw-harness v2.0.1 in my data warehouse project:
 https://github.com/pugyy/dw-harness
 
 Do this in order:
@@ -570,7 +586,7 @@ cd dw-harness
 pip install -e ".[test]"
 
 # Or use the same v2.0.0 wheel that was published to PyPI
-pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
+pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.1/dw_harness-2.0.1-py3-none-any.whl
 
 # Or clone and install editable
 git clone https://github.com/pugyy/dw-harness.git
@@ -610,7 +626,7 @@ plugins/dw-harness/           # generated plugin install unit
 template/                     # generated copy-template
 contracts/schema/             # table-contract JSON Schema (ODCS subset)
 examples/demo/                # orders-table fixtures and counter-cases a-f
-tests/                        # 123 tests: rules, guards, contracts, reconciliation, evidence, wiring, migration, manifests, CLI
+tests/                        # 124 tests: rules, guards, contracts, reconciliation, evidence, wiring, migration, manifests, CLI
 ```
 
 ### Six layers

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dw-harness"
-version = "2.0.0"
+version = "2.0.1"
 description = "Data warehouse AI engineering layer: SQL guards, table contracts, key-level reconciliation and the 8-step workflow (MaxCompute -> StarRocks)."
 readme = "README.md"
 requires-python = ">=3.9"

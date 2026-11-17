@@ -318,6 +318,23 @@ def run_init(target: Path, template_root: Path, python: str, dialect: str,
     machinery = [(s, d) for s, d in machinery if not d.endswith("hooks/hooks.json")]
     install_tree(target, template_root, tree + scaffold_files + machinery,
                  dry_run, report, v1_hashes)
+    # Wheel builds exclude template/.claude/dw_core to avoid shipping a second
+    # copy of the package. Copy the installed core into the project instead.
+    if "dw_core" in groups and not (template_root / ".claude" / "dw_core").is_dir():
+        core_root = Path(__file__).resolve().parent
+        core_files: List[Tuple[str, str]] = []
+        for item in sorted(core_root.rglob("*")):
+            if not item.is_file():
+                continue
+            rel = item.relative_to(core_root)
+            if rel.parts[:2] == ("data", "template"):
+                continue
+            if "__pycache__" in rel.parts or item.suffix == ".pyc":
+                continue
+            rel_posix = rel.as_posix()
+            core_files.append((rel_posix, f".claude/dw_core/{rel_posix}"))
+        if core_files:
+            install_tree(target, core_root, core_files, dry_run, report, v1_hashes)
     merge_settings(target, python, dry_run, report, statusline=statusline, mode=mode)
     if mcp:
         mcp_path = target / ".mcp.json"

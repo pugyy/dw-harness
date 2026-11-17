@@ -5,4 +5,5 @@ graft examples
 graft contracts
 prune examples/demo/report
 prune .mimosa
+prune template/.claude/dw_core
 global-exclude __pycache__ *.py[cod] *.bak-* .DS_Store

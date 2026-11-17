@@ -66,6 +66,21 @@ class ReleasePathsTests(unittest.TestCase):
                 local.write_bytes(outside.read_bytes())
                 self.assertEqual(mcp["_tool_get_check_report"]({})["schema"], "dw-check/1")
 
+    def test_init_without_template_core_copies_installed_core(self):
+        import shutil
+        from dw_core.migrate import run_init
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            template = root / "template"
+            shutil.copytree(REPO / "template", template,
+                            ignore=shutil.ignore_patterns("dw_core"))
+            self.assertFalse((template / ".claude" / "dw_core").exists())
+            project = root / "project"
+            report = run_init(project, template, sys.executable, "")
+            self.assertFalse(report.conflicts)
+            self.assertTrue((project / ".claude/dw_core/__init__.py").is_file())
+            self.assertTrue((project / ".claude/dw_core/data/dialects/odps.json").is_file())
+
     def test_changeset_checks_second_table_against_git_baseline(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

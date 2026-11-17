@@ -5,7 +5,7 @@ deep SQL parsing, database clients) degrade gracefully and are reported as
 "unavailable" instead of raising.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 EVIDENCE_SCHEMA = "dw-evidence/2"
 CONTRACT_SCHEMA = "dw-contract/2"

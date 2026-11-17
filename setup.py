@@ -17,7 +17,8 @@ class BuildPy(build_py):
         # contains both the installed package and the template copy; a future
         # packaging cleanup can move the template to a single top-level data dir.
         copytree(template, Path(self.build_lib) / "dw_core" / "data" / "template",
-                 dirs_exist_ok=True, ignore=ignore_patterns("__pycache__", "*.pyc", "*.bak-*"))
+                 dirs_exist_ok=True,
+                 ignore=ignore_patterns("__pycache__", "*.pyc", "*.bak-*", "dw_core"))
 
 
 setup(cmdclass={"build_py": BuildPy})

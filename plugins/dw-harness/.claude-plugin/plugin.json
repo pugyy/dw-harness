@@ -1,6 +1,6 @@
 {
   "name": "dw-harness",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Data warehouse AI engineering layer: guards, contracts, reconciliation and the 8-step workflow for MaxCompute -> StarRocks.",
   "author": {
     "name": "pugyy"
