@@ -216,6 +216,9 @@ claude --plugin-dir ./dw-harness/plugins/dw-harness
 # 直接从 Git 安装（PyPI 尚未发布）
 pip install "dw-harness[test] @ git+https://github.com/pugyy/dw-harness.git"
 
+# 或使用 v2.0.0 Release 中的 wheel
+pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
+
 # 或 clone 后 editable 安装
 git clone https://github.com/pugyy/dw-harness.git
 cd dw-harness
@@ -551,6 +554,9 @@ The `plugin-validate` workflow needs a `CLAUDE_CODE_OAUTH_TOKEN` secret; without
 ```bash
 # Install directly from Git (PyPI is not published yet)
 pip install "dw-harness[test] @ git+https://github.com/pugyy/dw-harness.git"
+
+# Or use the wheel attached to the v2.0.0 release
+pip install https://github.com/pugyy/dw-harness/releases/download/v2.0.0/dw_harness-2.0.0-py3-none-any.whl
 
 # Or clone and install editable
 git clone https://github.com/pugyy/dw-harness.git
